@@ -1,11 +1,11 @@
 # YukiSSH
 
-Android SSH 客户端 — 简洁、轻量的远程终端工具。
+Android SSH 客户端 — 简洁、超轻量的远程终端工具。
 
 <p align="center">
-  <img src="screenshots/connection_list.png" alt="连接列表" width="280">
-  <img src="screenshots/edit_connection.png" alt="编辑连接" width="280">
-  <img src="screenshots/terminal.png" alt="终端界面" width="280">
+  <img src="screenshots/pic3.jpg" alt="连接列表" width="280">
+  <img src="screenshots/pic1.jpg" alt="编辑连接" width="280">
+  <img src="screenshots/pic2.jpg" alt="终端界面" width="280">
 </p>
 
 ## 功能
@@ -46,8 +46,6 @@ git clone https://github.com/Mrkuzumi/YukiSSH.git
 3. 点击已保存的连接卡片进入终端
 4. 点击终端界面可唤出键盘输入，点击复制按钮可将终端内容复制到剪贴板
 
-<!-- TODO: 增加截图 -->
-![终端会话](screenshots/pic1.jpg)
 
 ## 免责声明
 
