@@ -31,7 +31,7 @@
             android:name=".TerminalActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustNothing" />
 
     </application>
 </manifest>

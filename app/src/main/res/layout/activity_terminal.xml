@@ -117,7 +117,7 @@
             android:textColor="@android:color/transparent"
             android:textCursorDrawable="@null"
             android:cursorVisible="false"
-            android:inputType="textVisiblePassword|textMultiLine"
+            android:inputType="text|textMultiLine|textNoSuggestions"
             android:imeOptions="flagNoFullscreen"
             android:importantForAutofill="no" />
 

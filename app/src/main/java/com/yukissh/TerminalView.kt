@@ -61,6 +61,7 @@ class TerminalView @JvmOverloads constructor(
 
     private var maxCols = 0
     private var autoScroll = true
+    private var viewScrollY = 0  // Custom scroll Y, not system scrollTo
 
     // Touch tracking
     private var touchDownX = 0f
@@ -101,7 +102,7 @@ class TerminalView @JvmOverloads constructor(
         if (oldw == 0 || oldh == 0) {
             resizeBuffer()
         } else if (autoScroll && buffer.size >= rows) {
-            scrollToBottom()
+            post { scrollToBottom() }
         }
     }
 
@@ -110,7 +111,7 @@ class TerminalView @JvmOverloads constructor(
         for (i in 0 until rows) buffer.add(mutableListOf())
         cursorRow = 0; cursorCol = 0
         maxCols = 0; autoScroll = true
-        scrollTo(0, 0)
+        viewScrollY = 0; scrollTo(0, 0)
         invalidate()
     }
 
@@ -141,7 +142,8 @@ class TerminalView @JvmOverloads constructor(
 
     private fun scrollToBottom() {
         val maxSY = ((buffer.size - rows) * charHeight).toInt().coerceAtLeast(0)
-        scrollTo(scrollX, maxSY)
+        viewScrollY = maxSY
+        invalidate()
     }
 
     private fun putUtf8Char(ch: Char) {
@@ -294,7 +296,7 @@ class TerminalView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (charWidth == 0f || charHeight == 0f) return
-        val topRow = (scrollY / charHeight).toInt()
+        val topRow = (viewScrollY / charHeight).toInt()
         val startCol = (scrollX / charWidth).toInt()
         val visibleCols = (width / charWidth).toInt() + 1
         val visibleRows = rows + 1
@@ -336,7 +338,7 @@ class TerminalView @JvmOverloads constructor(
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 touchDownX = event.x; touchDownY = event.y
-                lastSX = scrollX; lastSY = scrollY; moved = false
+                lastSX = scrollX; lastSY = viewScrollY; moved = false
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = (touchDownX - event.x).toInt()
@@ -346,8 +348,10 @@ class TerminalView @JvmOverloads constructor(
                 val newX = (lastSX + dx).coerceIn(0, maxSX)
                 val maxSY = ((buffer.size - rows) * charHeight).toInt().coerceAtLeast(0)
                 val newY = (lastSY + dy).coerceIn(0, maxSY)
-                scrollTo(newX, newY)
+                scrollTo(newX, 0)
+                viewScrollY = newY
                 autoScroll = newY >= maxSY
+                invalidate()
             }
             MotionEvent.ACTION_UP -> {
                 if (!moved) performClick()
@@ -360,7 +364,7 @@ class TerminalView @JvmOverloads constructor(
     override fun computeHorizontalScrollOffset(): Int = scrollX
     override fun computeHorizontalScrollExtent(): Int = width
     override fun computeVerticalScrollRange(): Int = (buffer.size * charHeight).toInt()
-    override fun computeVerticalScrollOffset(): Int = scrollY
+    override fun computeVerticalScrollOffset(): Int = viewScrollY
     override fun computeVerticalScrollExtent(): Int = height
 
     fun reset() {
@@ -370,7 +374,7 @@ class TerminalView @JvmOverloads constructor(
         currentFg = DEFAULT_FG; currentBg = DEFAULT_BG; currentBold = false
         escState = 0; params.clear(); csiParams.clear()
         utf8Expected = 0; utf8Len = 0
-        autoScroll = true; scrollTo(0, 0)
+        autoScroll = true; viewScrollY = 0; scrollTo(0, 0)
         invalidate()
     }
 
