@@ -40,6 +40,26 @@
             android:ellipsize="end" />
 
         <ImageButton
+            android:id="@+id/btnFontDown"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_font_down"
+            android:contentDescription="缩小字体"
+            app:tint="@color/terminal_on_surface_variant"
+            android:padding="8dp" />
+
+        <ImageButton
+            android:id="@+id/btnFontUp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_font_up"
+            android:contentDescription="放大字体"
+            app:tint="@color/terminal_on_surface_variant"
+            android:padding="8dp" />
+
+        <ImageButton
             android:id="@+id/btnCopy"
             android:layout_width="40dp"
             android:layout_height="40dp"

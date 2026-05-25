@@ -19,6 +19,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class TerminalActivity : AppCompatActivity() {
 
@@ -57,6 +59,20 @@ class TerminalActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btnClose).setOnClickListener {
             sshManager.disconnect()
             finish()
+        }
+
+        findViewById<ImageButton>(R.id.btnFontDown).setOnClickListener {
+            terminalView.changeFontSize(-1f)
+            lifecycleScope.launch(Dispatchers.IO) {
+                sshManager.sendResize(terminalView.cols, terminalView.rows)
+            }
+        }
+
+        findViewById<ImageButton>(R.id.btnFontUp).setOnClickListener {
+            terminalView.changeFontSize(1f)
+            lifecycleScope.launch(Dispatchers.IO) {
+                sshManager.sendResize(terminalView.cols, terminalView.rows)
+            }
         }
 
         findViewById<ImageButton>(R.id.btnCopy).setOnClickListener {

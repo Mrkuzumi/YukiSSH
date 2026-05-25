@@ -10,7 +10,7 @@ import java.io.PipedInputStream
 import java.io.PipedOutputStream
 
 class SSHManager {
-
+ 
     private var session: com.jcraft.jsch.Session? = null
     private var channel: ChannelShell? = null
     private var job: Job? = null
