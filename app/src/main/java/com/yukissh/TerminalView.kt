@@ -5,6 +5,7 @@ import android.graphics.*
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewTreeObserver
 
 class TerminalView @JvmOverloads constructor(
     context: Context,
@@ -71,7 +72,6 @@ class TerminalView @JvmOverloads constructor(
     private var moved = false
 
     init {
-        setLayerType(LAYER_TYPE_HARDWARE, null)
         applyFontSize(fontSizeDp)
     }
 
@@ -79,7 +79,10 @@ class TerminalView @JvmOverloads constructor(
         val newSize = (fontSizeDp + deltaDp).coerceIn(MIN_FONT_DP, MAX_FONT_DP)
         if (newSize != fontSizeDp) {
             applyFontSize(newSize)
-            recalcDimensions()
+            charWidth = textPaint.measureText("X")
+            charHeight = textPaint.fontSpacing
+            if (width > 0) cols = (width / charWidth).toInt().coerceAtLeast(1)
+            if (height > 0) rows = (height / charHeight).toInt().coerceAtLeast(1)
             invalidate()
         }
     }
@@ -89,20 +92,34 @@ class TerminalView @JvmOverloads constructor(
         textPaint.textSize = dpToPx(dp)
     }
 
-    private fun recalcDimensions() {
-        charWidth = textPaint.measureText("X")
-        charHeight = textPaint.fontSpacing
-        if (width > 0) cols = (width / charWidth).toInt().coerceAtLeast(1)
-        if (height > 0) rows = (height / charHeight).toInt().coerceAtLeast(1)
-    }
-
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        recalcDimensions()
+        charWidth = textPaint.measureText("X")
+        charHeight = textPaint.fontSpacing
+        if (w > 0) cols = (w / charWidth).toInt().coerceAtLeast(1)
+        if (h > 0) rows = (h / charHeight).toInt().coerceAtLeast(1)
         if (oldw == 0 || oldh == 0) {
             resizeBuffer()
-        } else if (autoScroll && buffer.size >= rows) {
-            post { scrollToBottom() }
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        viewTreeObserver.removeOnGlobalLayoutListener(layoutListener)
+    }
+
+    private val layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+        if (autoScroll && buffer.size > rows && rows > 0) {
+            val target = ((buffer.size - rows) * charHeight).toInt().coerceAtLeast(0)
+            if (viewScrollY != target) {
+                viewScrollY = target
+                invalidate()
+            }
         }
     }
 
@@ -295,6 +312,10 @@ class TerminalView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        // Force-scroll to bottom before every frame if autoScroll is on
+        if (autoScroll && buffer.size > rows && rows > 0) {
+            viewScrollY = ((buffer.size - rows) * charHeight).toInt().coerceAtLeast(0)
+        }
         if (charWidth == 0f || charHeight == 0f) return
         val topRow = (viewScrollY / charHeight).toInt()
         val startCol = (scrollX / charWidth).toInt()
@@ -350,7 +371,7 @@ class TerminalView @JvmOverloads constructor(
                 val newY = (lastSY + dy).coerceIn(0, maxSY)
                 scrollTo(newX, 0)
                 viewScrollY = newY
-                autoScroll = newY >= maxSY
+                if (moved) autoScroll = newY >= maxSY
                 invalidate()
             }
             MotionEvent.ACTION_UP -> {

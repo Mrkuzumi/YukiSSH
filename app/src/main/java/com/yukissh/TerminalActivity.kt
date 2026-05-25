@@ -7,11 +7,14 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.Log
+import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.Button
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -31,6 +34,7 @@ class TerminalActivity : AppCompatActivity() {
     private lateinit var tvStatus: TextView
     private lateinit var statusDot: View
     private lateinit var statusPill: LinearLayout
+    private lateinit var shortcutBar: HorizontalScrollView
     private var connection: SSHConnection? = null
     private var clearing = false
 
@@ -45,6 +49,7 @@ class TerminalActivity : AppCompatActivity() {
         tvStatus = findViewById(R.id.tvStatus)
         statusDot = findViewById(R.id.statusDot)
         statusPill = findViewById(R.id.statusPill)
+        shortcutBar = findViewById(R.id.shortcutBar)
 
         val storage = ConnectionStorage(this)
         val connId = intent.getLongExtra("connection_id", -1)
@@ -60,6 +65,9 @@ class TerminalActivity : AppCompatActivity() {
             sshManager.disconnect()
             finish()
         }
+
+        // Build shortcut keys bar
+        buildShortcuts()
 
         findViewById<ImageButton>(R.id.btnFontDown).setOnClickListener {
             terminalView.changeFontSize(-1f)
@@ -166,9 +174,6 @@ class TerminalActivity : AppCompatActivity() {
                         tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connected_text))
                         statusDot.setBackgroundResource(R.drawable.dot_green)
                         setPillColor(statusPill, R.color.status_connected_bg)
-                        hiddenInput.requestFocus()
-                        val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-                        imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT)
                     }
                     SSHManager.Status.DISCONNECTED -> {
                         tvStatus.text = getString(R.string.disconnected)
@@ -211,5 +216,54 @@ class TerminalActivity : AppCompatActivity() {
     private fun setPillColor(pill: LinearLayout, colorRes: Int) {
         val bg = pill.background as? GradientDrawable
         bg?.setColor(ContextCompat.getColor(this, colorRes))
+    }
+
+    private fun buildShortcuts() {
+        val container = findViewById<LinearLayout>(R.id.shortcutContainer)
+        val keys = listOf(
+            "Esc" to byteArrayOf(0x1B),
+            "Tab" to byteArrayOf(0x09),
+            "Ctrl+C" to byteArrayOf(0x03),
+            "Ctrl+Z" to byteArrayOf(0x1A),
+            "Ctrl+L" to byteArrayOf(0x0C),
+            "←" to byteArrayOf(0x1B, 0x5B, 0x44),
+            "↓" to byteArrayOf(0x1B, 0x5B, 0x42),
+            "↑" to byteArrayOf(0x1B, 0x5B, 0x41),
+            "→" to byteArrayOf(0x1B, 0x5B, 0x43),
+            "Home" to byteArrayOf(0x1B, 0x5B, 0x48),
+            "End" to byteArrayOf(0x1B, 0x5B, 0x46),
+            "PgUp" to byteArrayOf(0x1B, 0x5B, 0x35, 0x7E),
+            "PgDn" to byteArrayOf(0x1B, 0x5B, 0x36, 0x7E),
+            "/" to byteArrayOf(0x2F),
+            "|" to byteArrayOf(0x7C),
+            "-" to byteArrayOf(0x2D),
+            "_" to byteArrayOf(0x5F),
+            "[" to byteArrayOf(0x5B),
+            "]" to byteArrayOf(0x5D),
+            "(" to byteArrayOf(0x28),
+            ")" to byteArrayOf(0x29),
+        )
+
+        val padH = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 8f, resources.displayMetrics).toInt()
+        val padV = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 6f, resources.displayMetrics).toInt()
+
+        for ((label, data) in keys) {
+            val btn = Button(this).apply {
+                text = label
+                textSize = 12f
+                setPadding(padH, padV, padH, padV)
+                setTextColor(ContextCompat.getColor(this@TerminalActivity, R.color.terminal_on_surface))
+                setBackgroundColor(ContextCompat.getColor(this@TerminalActivity, R.color.terminal_toolbar))
+                setOnClickListener { sshManager.send(data) }
+            }
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                marginEnd = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 4f, resources.displayMetrics).toInt()
+            }
+            btn.layoutParams = lp
+            container.addView(btn)
+        }
     }
 }
