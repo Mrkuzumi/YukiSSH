@@ -35,7 +35,7 @@ class ConnectionListActivity : AppCompatActivity() {
             adapter = this@ConnectionListActivity.adapter
         }
 
-        findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton>(R.id.fabAdd)
+        findViewById<com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton>(R.id.fabAdd)
             .setOnClickListener {
                 startActivity(Intent(this, EditConnectionActivity::class.java))
             }

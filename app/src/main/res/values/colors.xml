@@ -1,12 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background">#FF1E1E1E</color>
-    <color name="terminal_bg">#FF0C0C0C</color>
-    <color name="primary">#FF6EC6FF</color>
-    <color name="primary_dark">#FF0069C0</color>
-    <color name="accent">#FF76FF03</color>
-    <color name="surface">#FF2D2D2D</color>
-    <color name="on_surface">#FFE0E0E0</color>
-    <color name="error">#FFCF6679</color>
-    <color name="ic_launcher_background">#FF0C0C0C</color>
+    <!-- MD3 Primary -->
+    <color name="md_primary">#FF6889F4</color>
+    <color name="md_on_primary">#FFFFFFFF</color>
+    <color name="md_primary_container">#FFDDE0FF</color>
+    <color name="md_on_primary_container">#FF001452</color>
+
+    <!-- MD3 Secondary -->
+    <color name="md_secondary">#FF5B5D72</color>
+    <color name="md_on_secondary">#FFFFFFFF</color>
+    <color name="md_secondary_container">#FFE1E0F9</color>
+    <color name="md_on_secondary_container">#FF181A2C</color>
+
+    <!-- MD3 Tertiary -->
+    <color name="md_tertiary">#FF745470</color>
+    <color name="md_on_tertiary">#FFFFFFFF</color>
+    <color name="md_tertiary_container">#FFFFD7F5</color>
+    <color name="md_on_tertiary_container">#FF2B122A</color>
+
+    <!-- MD3 Error -->
+    <color name="md_error">#FFBA1A1A</color>
+    <color name="md_on_error">#FFFFFFFF</color>
+    <color name="md_error_container">#FFFFDAD6</color>
+    <color name="md_on_error_container">#FF410002</color>
+
+    <!-- MD3 Surface / Background -->
+    <color name="md_surface">#FFFEFBFF</color>
+    <color name="md_on_surface">#FF1B1B1F</color>
+    <color name="md_surface_variant">#FFE3E1EC</color>
+    <color name="md_on_surface_variant">#FF46464F</color>
+    <color name="md_surface_dim">#FFDCD9E0</color>
+
+    <color name="md_background">#FFFEFBFF</color>
+    <color name="md_on_background">#FF1B1B1F</color>
+
+    <color name="md_outline">#FF767680</color>
+    <color name="md_outline_variant">#FFC6C5D0</color>
+
+    <!-- Terminal dark theme (night mode) -->
+    <color name="terminal_bg">#FF0D1117</color>
+    <color name="terminal_surface">#FF161B22</color>
+    <color name="terminal_toolbar">#FF161B22</color>
+    <color name="terminal_on_surface">#FFE6EDF3</color>
+    <color name="terminal_on_surface_variant">#FF8B949E</color>
+
+    <!-- Status colors -->
+    <color name="status_connected_bg">#FFDCFCE7</color>
+    <color name="status_connected_text">#FF166534</color>
+    <color name="status_disconnected_bg">#FFFFE4E6</color>
+    <color name="status_disconnected_text">#FF991B1B</color>
+    <color name="status_connecting_bg">#FFFEF9C3</color>
+    <color name="status_connecting_text">#FF854D0E</color>
+
+    <!-- Legacy compat -->
+    <color name="ic_launcher_background">#FF0D1117</color>
 </resources>

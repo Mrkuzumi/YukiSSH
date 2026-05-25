@@ -47,7 +47,7 @@ git clone https://github.com/Mrkuzumi/YukiSSH.git
 4. 点击终端界面可唤出键盘输入，点击复制按钮可将终端内容复制到剪贴板
 
 <!-- TODO: 增加截图 -->
-![终端会话](screenshots/terminal_session.png)
+![终端会话](screenshots/pic1.jpg)
 
 ## 免责声明
 

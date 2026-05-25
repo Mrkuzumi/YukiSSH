@@ -2,6 +2,7 @@ package com.yukissh
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -12,9 +13,11 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 
 class TerminalActivity : AppCompatActivity() {
@@ -25,6 +28,7 @@ class TerminalActivity : AppCompatActivity() {
     private lateinit var tvTitle: TextView
     private lateinit var tvStatus: TextView
     private lateinit var statusDot: View
+    private lateinit var statusPill: LinearLayout
     private var connection: SSHConnection? = null
     private var clearing = false
 
@@ -38,6 +42,7 @@ class TerminalActivity : AppCompatActivity() {
         tvTitle = findViewById(R.id.tvTitle)
         tvStatus = findViewById(R.id.tvStatus)
         statusDot = findViewById(R.id.statusDot)
+        statusPill = findViewById(R.id.statusPill)
 
         val storage = ConnectionStorage(this)
         val connId = intent.getLongExtra("connection_id", -1)
@@ -136,23 +141,30 @@ class TerminalActivity : AppCompatActivity() {
                 when (status) {
                     SSHManager.Status.CONNECTING -> {
                         tvStatus.text = getString(R.string.connecting)
+                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connecting_text))
                         statusDot.setBackgroundResource(R.drawable.dot_yellow)
+                        setPillColor(statusPill, R.color.status_connecting_bg)
                     }
                     SSHManager.Status.CONNECTED -> {
                         tvStatus.text = getString(R.string.connected)
+                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connected_text))
                         statusDot.setBackgroundResource(R.drawable.dot_green)
-                        // Request focus & show keyboard on connect
+                        setPillColor(statusPill, R.color.status_connected_bg)
                         hiddenInput.requestFocus()
                         val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
                         imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT)
                     }
                     SSHManager.Status.DISCONNECTED -> {
                         tvStatus.text = getString(R.string.disconnected)
+                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
                         statusDot.setBackgroundResource(R.drawable.dot_red)
+                        setPillColor(statusPill, R.color.status_disconnected_bg)
                     }
                     SSHManager.Status.ERROR -> {
                         tvStatus.text = "连接失败"
+                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
                         statusDot.setBackgroundResource(R.drawable.dot_red)
+                        setPillColor(statusPill, R.color.status_disconnected_bg)
                     }
                 }
             }
@@ -178,5 +190,10 @@ class TerminalActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         sshManager.disconnect()
+    }
+
+    private fun setPillColor(pill: LinearLayout, colorRes: Int) {
+        val bg = pill.background as? GradientDrawable
+        bg?.setColor(ContextCompat.getColor(this, colorRes))
     }
 }

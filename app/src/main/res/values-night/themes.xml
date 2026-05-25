@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <!-- Light theme (MD3) -->
-    <style name="Theme.YukiSSH" parent="Theme.Material3.Light.NoActionBar">
+    <style name="Theme.YukiSSH" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/md_primary</item>
         <item name="colorOnPrimary">@color/md_on_primary</item>
         <item name="colorPrimaryContainer">@color/md_primary_container</item>
@@ -11,12 +9,6 @@
         <item name="colorOnSecondary">@color/md_on_secondary</item>
         <item name="colorSecondaryContainer">@color/md_secondary_container</item>
         <item name="colorOnSecondaryContainer">@color/md_on_secondary_container</item>
-        <item name="colorTertiary">@color/md_tertiary</item>
-        <item name="colorOnTertiary">@color/md_on_tertiary</item>
-        <item name="colorError">@color/md_error</item>
-        <item name="colorOnError">@color/md_on_error</item>
-        <item name="colorErrorContainer">@color/md_error_container</item>
-        <item name="colorOnErrorContainer">@color/md_on_error_container</item>
         <item name="colorSurface">@color/md_surface</item>
         <item name="colorOnSurface">@color/md_on_surface</item>
         <item name="colorSurfaceVariant">@color/md_surface_variant</item>
@@ -27,7 +19,6 @@
         <item name="colorOutlineVariant">@color/md_outline_variant</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
-
 </resources>

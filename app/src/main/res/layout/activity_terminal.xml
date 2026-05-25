@@ -11,55 +11,71 @@
     <LinearLayout
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:background="@color/surface"
+        android:layout_height="52dp"
+        android:background="@color/terminal_toolbar"
         android:gravity="center_vertical"
-        android:paddingHorizontal="12dp"
+        android:paddingHorizontal="8dp"
         android:orientation="horizontal">
 
         <ImageButton
             android:id="@+id/btnClose"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="?attr/homeAsUpIndicator"
+            android:src="@drawable/ic_arrow_back"
             android:contentDescription="@string/cancel"
-            app:tint="@color/on_surface" />
+            app:tint="@color/terminal_on_surface"
+            android:padding="8dp" />
 
         <TextView
             android:id="@+id/tvTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginHorizontal="8dp"
-            android:textColor="@color/on_surface"
+            android:layout_marginHorizontal="4dp"
+            android:textColor="@color/terminal_on_surface"
             android:textSize="15sp"
+            android:fontFamily="sans-serif-medium"
             android:singleLine="true"
             android:ellipsize="end" />
 
         <ImageButton
             android:id="@+id/btnCopy"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_edit"
+            android:src="@drawable/ic_content_copy"
             android:contentDescription="复制"
-            app:tint="@color/on_surface" />
+            app:tint="@color/terminal_on_surface_variant"
+            android:padding="8dp" />
 
-        <View
-            android:id="@+id/statusDot"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
-            android:layout_marginEnd="6dp"
-            android:background="@drawable/dot_red" />
-
-        <TextView
-            android:id="@+id/tvStatus"
+        <LinearLayout
+            android:id="@+id/statusPill"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#99E0E0E0"
-            android:textSize="12sp"
-            android:text="@string/disconnected" />
+            android:layout_height="28dp"
+            android:background="@drawable/bg_status_pill"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="10dp"
+            android:layout_marginStart="4dp">
+
+            <View
+                android:id="@+id/statusDot"
+                android:layout_width="6dp"
+                android:layout_height="6dp"
+                android:background="@drawable/dot_red" />
+
+            <TextView
+                android:id="@+id/tvStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:textColor="@color/status_disconnected_text"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:text="@string/disconnected" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
