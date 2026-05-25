@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YukiSSH</string>
+    <string name="add_connection">添加连接</string>
+    <string name="edit_connection">编辑连接</string>
+    <string name="delete_connection">删除连接</string>
+    <string name="connection_name">连接名称</string>
+    <string name="host">主机地址</string>
+    <string name="port">端口</string>
+    <string name="username">用户名</string>
+    <string name="password">密码</string>
+    <string name="save">保存</string>
+    <string name="cancel">取消</string>
+    <string name="connect">连接</string>
+    <string name="disconnect">断开</string>
+    <string name="no_connections">暂无保存的连接</string>
+    <string name="confirm_delete">确认删除此连接？</string>
+    <string name="connecting">正在连接…</string>
+    <string name="connected">已连接</string>
+    <string name="disconnected">未连接</string>
+</resources>
