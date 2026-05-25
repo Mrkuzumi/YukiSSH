@@ -11,8 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?android:colorBackground"
-        app:elevation="0dp"
-        app:liftOnScroll="true">
+        app:elevation="0dp">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
@@ -25,26 +24,34 @@
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerView"
+    <FrameLayout
+        android:id="@+id/fragmentContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="96dp"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+        android:layout_marginBottom="?attr/actionBarSize"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior" >
 
-    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
-        android:id="@+id/fabAdd"
-        android:layout_width="wrap_content"
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/fabAdd"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginEnd="6dp"
+            android:layout_marginBottom="25dp"
+            android:text="新建连接"
+            android:textColor="?attr/colorOnPrimaryContainer"
+            app:backgroundTint="?attr/colorPrimaryContainer"
+            app:icon="@android:drawable/ic_input_add"
+            app:iconTint="?attr/colorOnPrimaryContainer" />
+    </FrameLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNav"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="32dp"
-        android:text="新建连接"
-        app:icon="@android:drawable/ic_input_add"
-        app:iconTint="?attr/colorOnPrimaryContainer"
-        app:backgroundTint="?attr/colorPrimaryContainer"
-        android:textColor="?attr/colorOnPrimaryContainer" />
+        android:layout_gravity="bottom"
+        app:menu="@menu/bottom_nav"
+        app:labelVisibilityMode="labeled"
+        style="@style/Widget.Material3.BottomNavigationView" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
