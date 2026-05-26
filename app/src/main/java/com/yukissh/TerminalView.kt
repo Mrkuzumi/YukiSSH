@@ -63,6 +63,9 @@ class TerminalView @JvmOverloads constructor(
     private var maxCols = 0
     private var autoScroll = true
     private var viewScrollY = 0  // Custom scroll Y, not system scrollTo
+    private var cursorVisible = true
+    private val cursorBlinkInterval = 500L
+    private val cursorBlinkTask = Runnable { toggleCursorBlink() }
 
     // Touch tracking
     private var touchDownX = 0f
@@ -106,11 +109,35 @@ class TerminalView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         viewTreeObserver.addOnGlobalLayoutListener(layoutListener)
+        startCursorBlink()
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         viewTreeObserver.removeOnGlobalLayoutListener(layoutListener)
+        stopCursorBlink()
+    }
+
+    private fun startCursorBlink() {
+        stopCursorBlink()
+        cursorVisible = true
+        postDelayed(cursorBlinkTask, cursorBlinkInterval)
+    }
+
+    private fun stopCursorBlink() {
+        removeCallbacks(cursorBlinkTask)
+    }
+
+    private fun resetCursorBlink() {
+        removeCallbacks(cursorBlinkTask)
+        cursorVisible = true
+        postDelayed(cursorBlinkTask, cursorBlinkInterval)
+    }
+
+    private fun toggleCursorBlink() {
+        cursorVisible = !cursorVisible
+        invalidate()
+        postDelayed(cursorBlinkTask, cursorBlinkInterval)
     }
 
     private val layoutListener = ViewTreeObserver.OnGlobalLayoutListener {
@@ -154,6 +181,7 @@ class TerminalView @JvmOverloads constructor(
             }
         }
         if (autoScroll) scrollToBottom()
+        resetCursorBlink()
         postInvalidateOnAnimation()
     }
 
@@ -351,6 +379,20 @@ class TerminalView @JvmOverloads constructor(
                 val chars = CharArray(end - c) { i -> line[c + i].ch }
                 canvas.drawText(String(chars), x, y - textPaint.descent(), textPaint)
                 c = end
+            }
+        }
+        // Draw cursor
+        if (cursorVisible && cursorRow >= topRow && cursorRow < topRow + visibleRows && cursorCol >= startCol) {
+            val cy = (cursorRow - topRow + 1) * charHeight
+            val cx = cursorCol * charWidth
+            textPaint.color = COLORS[currentFg]
+            canvas.drawRect(cx, cy - charHeight, cx + charWidth, cy, textPaint)
+            if (cursorRow < buffer.size && cursorCol < buffer[cursorRow].size) {
+                val cell = buffer[cursorRow][cursorCol]
+                if (cell.ch != ' ' && cell.ch.code != 0) {
+                    textPaint.color = COLORS[cell.bg]
+                    canvas.drawText(cell.ch.toString(), cx, cy - textPaint.descent(), textPaint)
+                }
             }
         }
     }
