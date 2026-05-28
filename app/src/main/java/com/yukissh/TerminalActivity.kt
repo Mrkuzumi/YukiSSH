@@ -2,11 +2,15 @@ package com.yukissh
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.IBinder
 import android.text.Editable
 import android.text.TextWatcher
-import android.util.Log
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.View
@@ -21,13 +25,14 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 
 class TerminalActivity : AppCompatActivity() {
 
-    private lateinit var sshManager: SSHManager
+    private var sshManager: SSHManager? = null
+    private var sshService: SSHService? = null
     private lateinit var terminalView: TerminalView
     private lateinit var hiddenInput: EditText
     private lateinit var tvTitle: TextView
@@ -37,12 +42,27 @@ class TerminalActivity : AppCompatActivity() {
     private lateinit var shortcutBar: HorizontalScrollView
     private var connection: SSHConnection? = null
     private var clearing = false
+    private var isReconnect = false
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as SSHService.SSHBinder
+            sshManager = binder.getManager()
+            sshService = binder.getService()
+            setupSSHCallbacks()
+            sshService?.startConnection(connection!!, terminalView.cols, terminalView.rows)
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            sshManager = null
+            sshService = null
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_terminal)
 
-        sshManager = SSHManager()
         terminalView = findViewById(R.id.terminalView)
         hiddenInput = findViewById(R.id.hiddenInput)
         tvTitle = findViewById(R.id.tvTitle)
@@ -62,24 +82,25 @@ class TerminalActivity : AppCompatActivity() {
         tvTitle.text = connection!!.name.ifEmpty { "${connection!!.username}@${connection!!.host}" }
 
         findViewById<ImageButton>(R.id.btnClose).setOnClickListener {
-            sshManager.disconnect()
+            sshManager?.disconnect()
+            unbindService(serviceConnection)
+            stopService(Intent(this, SSHService::class.java))
             finish()
         }
 
-        // Build shortcut keys bar
         buildShortcuts()
 
         findViewById<ImageButton>(R.id.btnFontDown).setOnClickListener {
             terminalView.changeFontSize(-1f)
-            lifecycleScope.launch(Dispatchers.IO) {
-                sshManager.sendResize(terminalView.cols, terminalView.rows)
+            MainScope().launch(Dispatchers.IO) {
+                sshManager?.sendResize(terminalView.cols, terminalView.rows)
             }
         }
 
         findViewById<ImageButton>(R.id.btnFontUp).setOnClickListener {
             terminalView.changeFontSize(1f)
-            lifecycleScope.launch(Dispatchers.IO) {
-                sshManager.sendResize(terminalView.cols, terminalView.rows)
+            MainScope().launch(Dispatchers.IO) {
+                sshManager?.sendResize(terminalView.cols, terminalView.rows)
             }
         }
 
@@ -90,7 +111,12 @@ class TerminalActivity : AppCompatActivity() {
             Toast.makeText(this, "已复制终端内容", Toast.LENGTH_SHORT).show()
         }
 
-        // Track individual character input via TextWatcher
+        findViewById<ImageButton>(R.id.btnRefresh).setOnClickListener {
+            isReconnect = true
+            sshManager?.disconnect()
+            sshService?.startConnection(connection!!, terminalView.cols, terminalView.rows)
+        }
+
         hiddenInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -99,10 +125,9 @@ class TerminalActivity : AppCompatActivity() {
                 s?.let {
                     if (it.isNotEmpty()) {
                         val text = it.toString()
-                        Log.d("Terminal", "textWatcher: '${text.replace("\n", "\\n")}'")
                         for (ch in text) {
-                            if (ch == '\n') sshManager.send(byteArrayOf('\r'.code.toByte()))
-                            else sshManager.send(ch.toString().toByteArray())
+                            if (ch == '\n') sshManager?.send(byteArrayOf('\r'.code.toByte()))
+                            else sshManager?.send(ch.toString().toByteArray())
                         }
                         clearing = true
                         it.clear()
@@ -112,13 +137,11 @@ class TerminalActivity : AppCompatActivity() {
             }
         })
 
-        // Handler for Enter / special keys via IME editor actions (secure keyboard fallback)
         hiddenInput.setOnEditorActionListener { _, actionId, event ->
             if (event != null && event.action == KeyEvent.ACTION_DOWN) {
                 when (event.keyCode) {
                     KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        Log.d("Terminal", "editor action Enter via keyEvent")
-                        sshManager.send(byteArrayOf('\r'.code.toByte()))
+                        sshManager?.send(byteArrayOf('\r'.code.toByte()))
                         true
                     }
                     else -> false
@@ -127,27 +150,24 @@ class TerminalActivity : AppCompatActivity() {
                 || actionId == EditorInfo.IME_ACTION_SEND
                 || actionId == EditorInfo.IME_ACTION_NEXT
                 || actionId == EditorInfo.IME_ACTION_GO) {
-                Log.d("Terminal", "editor action: $actionId")
-                sshManager.send(byteArrayOf('\r'.code.toByte()))
+                sshManager?.send(byteArrayOf('\r'.code.toByte()))
                 true
             } else false
         }
 
-        // Handle hardware/soft key events
         hiddenInput.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN) {
-                Log.d("Terminal", "onKey: keyCode=$keyCode")
                 when (keyCode) {
                     KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                        sshManager.send(byteArrayOf('\r'.code.toByte()))
+                        sshManager?.send(byteArrayOf('\r'.code.toByte()))
                         true
                     }
                     KeyEvent.KEYCODE_DEL -> {
-                        sshManager.send(byteArrayOf(0x7F))
+                        sshManager?.send(byteArrayOf(0x7F))
                         true
                     }
                     KeyEvent.KEYCODE_TAB -> {
-                        sshManager.send(byteArrayOf('\t'.code.toByte()))
+                        sshManager?.send(byteArrayOf('\t'.code.toByte()))
                         true
                     }
                     else -> false
@@ -155,62 +175,74 @@ class TerminalActivity : AppCompatActivity() {
             } else false
         }
 
-        // Wire SSH output -> TerminalView
-        sshManager.onOutput = { data, len ->
-            terminalView.write(data, len)
-        }
-
-        sshManager.onStatusChange = { status ->
-            runOnUiThread {
-                when (status) {
-                    SSHManager.Status.CONNECTING -> {
-                        tvStatus.text = getString(R.string.connecting)
-                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connecting_text))
-                        statusDot.setBackgroundResource(R.drawable.dot_yellow)
-                        setPillColor(statusPill, R.color.status_connecting_bg)
-                    }
-                    SSHManager.Status.CONNECTED -> {
-                        tvStatus.text = getString(R.string.connected)
-                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connected_text))
-                        statusDot.setBackgroundResource(R.drawable.dot_green)
-                        setPillColor(statusPill, R.color.status_connected_bg)
-                    }
-                    SSHManager.Status.DISCONNECTED -> {
-                        tvStatus.text = getString(R.string.disconnected)
-                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
-                        statusDot.setBackgroundResource(R.drawable.dot_red)
-                        setPillColor(statusPill, R.color.status_disconnected_bg)
-                    }
-                    SSHManager.Status.ERROR -> {
-                        tvStatus.text = "连接失败"
-                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
-                        statusDot.setBackgroundResource(R.drawable.dot_red)
-                        setPillColor(statusPill, R.color.status_disconnected_bg)
-                    }
-                }
-            }
-        }
-
-        // Tap anywhere on terminal to re-focus input
         terminalView.setOnClickListener {
             hiddenInput.requestFocus()
             val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
             imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT)
         }
 
-        connect()
+        val serviceIntent = Intent(this, SSHService::class.java).apply {
+            putExtra("connection_id", connId)
+        }
+        startService(serviceIntent)
+        bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
 
-    private fun connect() {
-        val conn = connection ?: return
-        terminalView.post {
-            sshManager.connect(conn, terminalView.cols, terminalView.rows, lifecycleScope)
+    private val outputListener: (ByteArray, Int) -> Unit = { data, len ->
+        terminalView.write(data, len)
+    }
+
+    private val statusListener: (SSHManager.Status) -> Unit = { status ->
+        runOnUiThread {
+            when (status) {
+                SSHManager.Status.CONNECTING -> {
+                    tvStatus.text = getString(R.string.connecting)
+                    tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connecting_text))
+                    statusDot.setBackgroundResource(R.drawable.dot_yellow)
+                    setPillColor(statusPill, R.color.status_connecting_bg)
+                }
+                SSHManager.Status.CONNECTED -> {
+                    tvStatus.text = getString(R.string.connected)
+                    tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connected_text))
+                    statusDot.setBackgroundResource(R.drawable.dot_green)
+                    setPillColor(statusPill, R.color.status_connected_bg)
+                    if (!isReconnect) {
+                        terminalView.reset()
+                    }
+                    isReconnect = false
+                }
+                SSHManager.Status.DISCONNECTED -> {
+                    tvStatus.text = getString(R.string.disconnected)
+                    tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
+                    statusDot.setBackgroundResource(R.drawable.dot_red)
+                    setPillColor(statusPill, R.color.status_disconnected_bg)
+                }
+                SSHManager.Status.ERROR -> {
+                    tvStatus.text = "连接断开"
+                    tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
+                    statusDot.setBackgroundResource(R.drawable.dot_red)
+                    setPillColor(statusPill, R.color.status_disconnected_bg)
+                }
+            }
         }
+    }
+
+    private fun setupSSHCallbacks() {
+        val mgr = sshManager ?: return
+        mgr.addOutputListener(outputListener)
+        mgr.addStatusListener(statusListener)
+    }
+
+    private fun removeSSHCallbacks() {
+        val mgr = sshManager ?: return
+        mgr.removeOutputListener(outputListener)
+        mgr.removeStatusListener(statusListener)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        sshManager.disconnect()
+        removeSSHCallbacks()
+        unbindService(serviceConnection)
     }
 
     private fun setPillColor(pill: LinearLayout, colorRes: Int) {
@@ -254,7 +286,7 @@ class TerminalActivity : AppCompatActivity() {
                 setPadding(padH, padV, padH, padV)
                 setTextColor(ContextCompat.getColor(this@TerminalActivity, R.color.terminal_on_surface))
                 setBackgroundColor(ContextCompat.getColor(this@TerminalActivity, R.color.terminal_toolbar))
-                setOnClickListener { sshManager.send(data) }
+                setOnClickListener { sshManager?.send(data) }
             }
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,

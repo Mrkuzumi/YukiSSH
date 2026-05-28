@@ -16,17 +16,23 @@ class SSHManager {
     private var job: Job? = null
     private var inputStream: InputStream? = null
     private var outputStream: OutputStream? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    var onOutput: ((ByteArray, Int) -> Unit)? = null
-    var onStatusChange: ((Status) -> Unit)? = null
+    private val outputListeners = mutableListOf<(ByteArray, Int) -> Unit>()
+    private val statusListeners = mutableListOf<(Status) -> Unit>()
+
+    fun addOutputListener(listener: (ByteArray, Int) -> Unit) = outputListeners.add(listener)
+    fun removeOutputListener(listener: (ByteArray, Int) -> Unit) = outputListeners.remove(listener)
+    fun addStatusListener(listener: (Status) -> Unit) = statusListeners.add(listener)
+    fun removeStatusListener(listener: (Status) -> Unit) = statusListeners.remove(listener)
 
     enum class Status { CONNECTING, CONNECTED, DISCONNECTED, ERROR }
 
-    fun connect(conn: SSHConnection, cols: Int, rows: Int, scope: CoroutineScope) {
+    fun connect(conn: SSHConnection, cols: Int, rows: Int) {
         job?.cancel()
-        job = scope.launch(Dispatchers.IO) {
+        job = scope.launch {
             try {
-                onStatusChange?.invoke(Status.CONNECTING)
+                statusListeners.forEach { it(Status.CONNECTING) }
 
                 val jsch = JSch()
                 jsch.setKnownHosts("/dev/null")
@@ -34,13 +40,14 @@ class SSHManager {
                 session?.setPassword(conn.password)
                 session?.setConfig("StrictHostKeyChecking", "no")
                 session?.setConfig("PreferredAuthentications", "password,keyboard-interactive")
-                session?.setTimeout(8000)
+                session?.setConfig("ServerAliveInterval", "30")
+                session?.setConfig("TCPKeepAlive", "yes")
+                session?.setTimeout(0)
                 session?.connect(8000)
 
                 val ch = session?.openChannel("shell") as? ChannelShell
                 channel = ch
 
-                // Use explicit pipe for stdin instead of getOutputStream
                 val stdinPipe = PipedInputStream()
                 val stdinWriter = PipedOutputStream(stdinPipe)
                 ch?.setInputStream(stdinPipe)
@@ -52,36 +59,39 @@ class SSHManager {
                 inputStream = ch?.inputStream
 
                 ch?.connect(5000)
-                onStatusChange?.invoke(Status.CONNECTED)
+                statusListeners.forEach { it(Status.CONNECTED) }
 
-                // Test send from IO thread
                 try {
                     stdinWriter.write('\r'.code)
                     stdinWriter.flush()
-                    Log.d("SSHManager", "test newline sent from IO thread")
                 } catch (e: Exception) {
                     Log.e("SSHManager", "test send failed", e)
                 }
 
                 val buf = ByteArray(4096)
                 while (isActive) {
-                    val avail = inputStream?.available() ?: 0
-                    if (avail > 0) {
-                        val len = inputStream!!.read(buf, 0, minOf(avail, buf.size))
-                        if (len > 0) {
-                            withContext(Dispatchers.Main) {
-                                onOutput?.invoke(buf, len)
+                    try {
+                        val avail = inputStream?.available() ?: 0
+                        if (avail > 0) {
+                            val len = inputStream!!.read(buf, 0, minOf(avail, buf.size))
+                            if (len > 0) {
+                                withContext(Dispatchers.Main) {
+                                    outputListeners.forEach { it(buf, len) }
+                                }
                             }
+                        } else {
+                            delay(10)
                         }
-                    } else {
-                        delay(10)
+                    } catch (e: Exception) {
+                        if (!isActive) break
+                        throw e
                     }
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.e("SSHManager", "connection error", e)
                 withContext(Dispatchers.Main) {
-                    onStatusChange?.invoke(Status.ERROR)
+                    statusListeners.forEach { it(Status.ERROR) }
                 }
             }
         }
@@ -92,8 +102,7 @@ class SSHManager {
             outputStream?.let {
                 it.write(data)
                 it.flush()
-                Log.d("SSHManager", "sent ${data.size} bytes")
-            } ?: Log.w("SSHManager", "outputStream is null")
+            }
         } catch (e: Exception) {
             Log.e("SSHManager", "send failed", e)
         }
@@ -113,6 +122,13 @@ class SSHManager {
         try { session?.disconnect() } catch (_: Exception) {}
         session = null
         channel = null
-        onStatusChange?.invoke(Status.DISCONNECTED)
+        outputStream = null
+        inputStream = null
+        statusListeners.forEach { it(Status.DISCONNECTED) }
+    }
+
+    fun destroy() {
+        disconnect()
+        scope.cancel()
     }
 }

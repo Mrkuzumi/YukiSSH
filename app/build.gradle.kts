@@ -34,6 +34,14 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    applicationVariants.all {
+        outputs.all {
+            (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.apply {
+                outputFileName = "YukiSSH_V${versionName}.apk"
+            }
+        }
+    }
 }
 
 dependencies {

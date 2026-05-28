@@ -69,6 +69,16 @@
             app:tint="@color/terminal_on_surface_variant"
             android:padding="8dp" />
 
+        <ImageButton
+            android:id="@+id/btnRefresh"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_refresh"
+            android:contentDescription="重新连接"
+            app:tint="@color/terminal_on_surface_variant"
+            android:padding="8dp" />
+
         <LinearLayout
             android:id="@+id/statusPill"
             android:layout_width="wrap_content"
