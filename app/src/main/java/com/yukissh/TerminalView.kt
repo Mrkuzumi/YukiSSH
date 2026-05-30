@@ -14,12 +14,41 @@ class TerminalView @JvmOverloads constructor(
 ) : View(context, attrs, defStyle) {
 
     companion object {
-        private val COLORS = intArrayOf(
+        // Standard 16 terminal colors
+        private val PALETTE_16 = intArrayOf(
             0xFF0C0C0C.toInt(), 0xFFC50F1F.toInt(), 0xFF13A10E.toInt(), 0xFFC19C00.toInt(),
             0xFF0037DA.toInt(), 0xFF881798.toInt(), 0xFF3A96DD.toInt(), 0xFFCCCCCC.toInt(),
             0xFF767676.toInt(), 0xFFE74856.toInt(), 0xFF16C60C.toInt(), 0xFFF9F1A5.toInt(),
             0xFF3B78FF.toInt(), 0xFFB4009E.toInt(), 0xFF61D6D6.toInt(), 0xFFF2F2F2.toInt(),
         )
+
+        // Full 256-color palette (built lazily)
+        private val PALETTE_256: IntArray by lazy {
+            IntArray(256) { idx ->
+                when {
+                    idx < 16 -> PALETTE_16[idx]
+                    idx in 16..231 -> {
+                        // 6×6×6 RGB cube (xterm standard: 0, 95, 135, 175, 215, 255)
+                        val n = idx - 16
+                        val rIdx = n / 36
+                        val gIdx = (n % 36) / 6
+                        val bIdx = n % 6
+                        val r = if (rIdx == 0) 0 else 55 + rIdx * 40
+                        val g = if (gIdx == 0) 0 else 55 + gIdx * 40
+                        val b = if (bIdx == 0) 0 else 55 + bIdx * 40
+                        0xFF000000.toInt() or (r shl 16) or (g shl 8) or b
+                    }
+                    else -> {
+                        // Grayscale ramp (232-255)
+                        val v = 8 + (idx - 232) * 10
+                        0xFF000000.toInt() or (v shl 16) or (v shl 8) or v
+                    }
+                }
+            }
+        }
+
+        fun color256(idx: Int): Int = PALETTE_256[idx.coerceIn(0, 255)]
+
         private const val DEFAULT_FG = 7
         private const val DEFAULT_BG = 0
         private const val MIN_FONT_DP = 6f
@@ -32,7 +61,7 @@ class TerminalView @JvmOverloads constructor(
     }
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = COLORS[DEFAULT_FG]
+        color = color256(DEFAULT_FG)
         typeface = Typeface.MONOSPACE
     }
     private val bgPaint = Paint()
@@ -283,8 +312,8 @@ class TerminalView @JvmOverloads constructor(
                 22 -> currentBold = false
                 in 30..37 -> currentFg = p - 30
                 in 40..47 -> currentBg = p - 40
-                38 -> { if (i + 2 < params.size && params[i + 1] == 5) { currentFg = params[i + 2].coerceIn(0, 15); i += 2 } }
-                48 -> { if (i + 2 < params.size && params[i + 1] == 5) { currentBg = params[i + 2].coerceIn(0, 15); i += 2 } }
+                38 -> { if (i + 2 < params.size && params[i + 1] == 5) { currentFg = params[i + 2].coerceIn(0, 255); i += 2 } }
+                48 -> { if (i + 2 < params.size && params[i + 1] == 5) { currentBg = params[i + 2].coerceIn(0, 255); i += 2 } }
                 in 90..97 -> currentFg = p - 90 + 8
                 in 100..107 -> currentBg = p - 100 + 8
             }
@@ -371,10 +400,10 @@ class TerminalView @JvmOverloads constructor(
                 val x = c * charWidth
                 val segWidth = (end - c) * charWidth
                 if (cell.bg != DEFAULT_BG) {
-                    bgPaint.color = COLORS[cell.bg]
+                    bgPaint.color = color256(cell.bg)
                     canvas.drawRect(x, y - charHeight + dpToPx(1f), x + segWidth, y + dpToPx(1f), bgPaint)
                 }
-                textPaint.color = COLORS[cell.fg]
+                textPaint.color = color256(cell.fg)
                 textPaint.isFakeBoldText = cell.bold
                 val chars = CharArray(end - c) { i -> line[c + i].ch }
                 canvas.drawText(String(chars), x, y - textPaint.descent(), textPaint)
@@ -385,12 +414,12 @@ class TerminalView @JvmOverloads constructor(
         if (cursorVisible && cursorRow >= topRow && cursorRow < topRow + visibleRows && cursorCol >= startCol) {
             val cy = (cursorRow - topRow + 1) * charHeight
             val cx = cursorCol * charWidth
-            textPaint.color = COLORS[currentFg]
+            textPaint.color = color256(currentFg)
             canvas.drawRect(cx, cy - charHeight, cx + charWidth, cy, textPaint)
             if (cursorRow < buffer.size && cursorCol < buffer[cursorRow].size) {
                 val cell = buffer[cursorRow][cursorCol]
                 if (cell.ch != ' ' && cell.ch.code != 0) {
-                    textPaint.color = COLORS[cell.bg]
+                    textPaint.color = color256(cell.bg)
                     canvas.drawText(cell.ch.toString(), cx, cy - textPaint.descent(), textPaint)
                 }
             }

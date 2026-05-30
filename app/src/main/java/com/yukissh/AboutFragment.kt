@@ -126,9 +126,16 @@ class AboutFragment : Fragment() {
             conn.setRequestProperty("Accept", "application/vnd.github+json")
             conn.connectTimeout = 10000
             conn.readTimeout = 10000
+            val code = conn.responseCode
+            if (code != 200) {
+                android.util.Log.e("AboutFragment", "GitHub API returned $code")
+                return null
+            }
             val json = conn.inputStream.bufferedReader().use { it.readText() }
             val obj = JSONObject(json)
-            val tag = obj.getString("tag_name").trimStart('v')
+            val tag = obj.getString("tag_name")
+                .trimStart('v', 'V')
+                .trimStart('-', '_')
             val assets = obj.getJSONArray("assets")
             var apkUrl = ""
             for (i in 0 until assets.length()) {
@@ -139,8 +146,13 @@ class AboutFragment : Fragment() {
                     break
                 }
             }
-            if (apkUrl.isEmpty()) null else Pair(tag, apkUrl)
+            if (apkUrl.isEmpty()) {
+                android.util.Log.e("AboutFragment", "No APK asset in release $tag")
+                return null
+            }
+            Pair(tag, apkUrl)
         } catch (e: Exception) {
+            android.util.Log.e("AboutFragment", "fetchLatestRelease failed", e)
             null
         }
     }
