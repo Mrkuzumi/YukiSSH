@@ -1,16 +1,23 @@
 package com.yukissh
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.PowerManager
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.View
@@ -43,6 +50,7 @@ class TerminalActivity : AppCompatActivity() {
     private var connection: SSHConnection? = null
     private var clearing = false
     private var isReconnect = false
+    private var started = false
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -50,7 +58,9 @@ class TerminalActivity : AppCompatActivity() {
             sshManager = binder.getManager()
             sshService = binder.getService()
             setupSSHCallbacks()
-            sshService?.startConnection(connection!!, terminalView.cols, terminalView.rows)
+            if (sshManager?.isRunning != true) {
+                sshService?.startConnection(connection!!, terminalView.cols, terminalView.rows)
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -181,11 +191,46 @@ class TerminalActivity : AppCompatActivity() {
             imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT)
         }
 
+        // Request notification permission on Android 13+ then start service
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIFY)
+                return
+            }
+        }
+        startAndBind()
+    }
+
+    private fun startAndBind() {
+        if (started) return
+        started = true
+        // Request battery optimization exemption to prevent Doze from killing network
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+                startActivity(intent)
+            }
+        }
+        val conn = connection ?: return
         val serviceIntent = Intent(this, SSHService::class.java).apply {
-            putExtra("connection_id", connId)
+            putExtra("connection_id", conn.id)
+            putExtra("connection_name", conn.name.ifEmpty { "${conn.username}@${conn.host}" })
         }
         startService(serviceIntent)
         bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_NOTIFY) {
+            startAndBind()
+        }
     }
 
     private val outputListener: (ByteArray, Int) -> Unit = { data, len ->
@@ -297,5 +342,9 @@ class TerminalActivity : AppCompatActivity() {
             btn.layoutParams = lp
             container.addView(btn)
         }
+    }
+
+    companion object {
+        private const val REQ_NOTIFY = 100
     }
 }

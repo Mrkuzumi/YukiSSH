@@ -28,6 +28,8 @@ class SSHManager {
 
     enum class Status { CONNECTING, CONNECTED, DISCONNECTED, ERROR }
 
+    val isRunning: Boolean get() = session?.isConnected == true && channel?.isConnected == true
+
     fun connect(conn: SSHConnection, cols: Int, rows: Int) {
         job?.cancel()
         job = scope.launch {
@@ -40,10 +42,11 @@ class SSHManager {
                 session?.setPassword(conn.password)
                 session?.setConfig("StrictHostKeyChecking", "no")
                 session?.setConfig("PreferredAuthentications", "password,keyboard-interactive")
-                session?.setConfig("ServerAliveInterval", "30")
-                session?.setConfig("TCPKeepAlive", "yes")
                 session?.setTimeout(0)
                 session?.connect(8000)
+                // Keepalive: send SSH protocol-level ping every 15s to prevent timeout
+                session?.setServerAliveInterval(15000)
+                session?.setServerAliveCountMax(999)
 
                 val ch = session?.openChannel("shell") as? ChannelShell
                 channel = ch

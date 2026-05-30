@@ -5,14 +5,18 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Binder
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
 class SSHService : Service() {
 
     private val binder = SSHBinder()
     val sshManager = SSHManager()
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     inner class SSHBinder : Binder() {
         fun getManager(): SSHManager = sshManager
@@ -32,25 +36,42 @@ class SSHService : Service() {
             setShowBadge(false)
         }
         nm.createNotificationChannel(channel)
+
+        try {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "YukiSSH:SSHService")
+            wakeLock?.setReferenceCounted(false)
+        } catch (_: Exception) {}
+
+        try {
+            val wm = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL, "YukiSSH:WiFi")
+            wifiLock?.setReferenceCounted(false)
+        } catch (_: Exception) {}
     }
 
     private var connName: String = ""
-    private var currentStatus: String = ""
+    private var connStatus: String = "等待连接…"
     private var notifyStatusListener: ((SSHManager.Status) -> Unit)? = null
 
     fun startConnection(conn: SSHConnection, cols: Int, rows: Int) {
         connName = conn.name.ifEmpty { "${conn.username}@${conn.host}" }
-        currentStatus = "正在连接…"
+        connStatus = "正在连接…"
         updateNotification()
+        wakeLock?.acquire()
+        wifiLock?.acquire()
         notifyStatusListener?.let { sshManager.removeStatusListener(it) }
         notifyStatusListener = { status ->
-            currentStatus = when (status) {
+            connStatus = when (status) {
                 SSHManager.Status.CONNECTING -> "正在连接…"
                 SSHManager.Status.CONNECTED -> "已连接"
                 SSHManager.Status.DISCONNECTED -> "已断开"
                 SSHManager.Status.ERROR -> "连接断开"
             }
             updateNotification()
+            if (status == SSHManager.Status.DISCONNECTED || status == SSHManager.Status.ERROR) {
+                releaseLocks()
+            }
         }
         sshManager.addStatusListener(notifyStatusListener!!)
         sshManager.connect(conn, cols, rows)
@@ -67,9 +88,9 @@ class SSHService : Service() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(connName)
-            .setContentText(currentStatus)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(connName.ifEmpty { "YukiSSH" })
+            .setContentText(connStatus)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -78,14 +99,23 @@ class SSHService : Service() {
         startForeground(NOTIFICATION_ID, notification)
     }
 
+    private fun releaseLocks() {
+        try { wakeLock?.release() } catch (_: Exception) {}
+        try { wifiLock?.release() } catch (_: Exception) {}
+    }
+
     var connId: Long = -1
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         connId = intent?.getLongExtra("connection_id", -1) ?: connId
+        connName = intent?.getStringExtra("connection_name") ?: connName
+        // Show notification immediately to satisfy foreground service requirement
+        updateNotification()
         return START_STICKY
     }
 
     override fun onDestroy() {
+        releaseLocks()
         sshManager.destroy()
         super.onDestroy()
     }
