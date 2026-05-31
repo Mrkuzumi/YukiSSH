@@ -54,7 +54,6 @@ class TerminalView @JvmOverloads constructor(
         private const val MIN_FONT_DP = 6f
         private const val MAX_FONT_DP = 20f
         private const val MAX_SCROLLBACK = 5000
-        private const val CHAR_SAMPLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     }
 
     data class Cell(var ch: Char = ' ', var fg: Int = DEFAULT_FG, var bg: Int = DEFAULT_BG, var bold: Boolean = false) {
@@ -64,8 +63,6 @@ class TerminalView @JvmOverloads constructor(
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = color256(DEFAULT_FG)
         typeface = Typeface.MONOSPACE
-        letterSpacing = 0f
-        isSubpixelText = false
     }
     private val bgPaint = Paint()
     private val cursorPaint = Paint()
@@ -128,12 +125,15 @@ class TerminalView @JvmOverloads constructor(
     }
 
     private fun recalcMetrics() {
-        // Use getTextWidths for exact monospace advance per character
-        val sample = CharArray(CHAR_SAMPLE.length) { CHAR_SAMPLE[it] }
-        val widths = FloatArray(sample.size)
-        textPaint.getTextWidths(sample, 0, sample.size, widths)
-        charWidth = widths.average().toFloat()
-        // Use fontSpacing for natural line height with leading
+        // Measure a fixed-width block of repeated chars for rock-solid charWidth
+        charWidth = textPaint.measureText("WWWWWWWWWW") / 10f
+        // Verify with a different character to detect non-monospace fonts
+        val alt = textPaint.measureText("iiiiiiiiii") / 10f
+        val diff = Math.abs(charWidth - alt) / charWidth
+        if (diff > 0.01f) {
+            // Font may not be true monospace; use the wider value to avoid clipping
+            charWidth = Math.max(charWidth, alt)
+        }
         charHeight = textPaint.fontSpacing
     }
 
