@@ -104,7 +104,7 @@ class ConnectionListActivity : AppCompatActivity() {
                     fetchLatestRelease()
                 }
                 if (result == null) return@launch
-                val (version, url) = result
+                val (version, url, body) = result
                 val currentVersion = try {
                     packageManager.getPackageInfo(packageName, 0).versionName ?: "1.0"
                 } catch (_: Exception) { "1.0" }
@@ -113,17 +113,23 @@ class ConnectionListActivity : AppCompatActivity() {
                     latestVersion = version
                     latestApkUrl = url
                     withContext(Dispatchers.Main) {
-                        showUpdateDialog(version)
+                        showUpdateDialog(version, body)
                     }
                 }
             } catch (_: Exception) {}
         }
     }
 
-    private fun showUpdateDialog(version: String) {
+    private fun showUpdateDialog(version: String, changelog: String) {
+        // 清理 GitHub markdown 使正文更适合弹窗阅读
+        val cleanBody = changelog
+            .replace(Regex("##\\s*"), "● ")
+            .replace(Regex("^-\\s+", RegexOption.MULTILINE), "  · ")
+            .replace(Regex("`([^`]+)`"), "$1")
+            .trim()
         MaterialAlertDialogBuilder(this)
             .setTitle("发现新版本 V$version")
-            .setMessage("GitHub Releases 上有新版本可用，是否立即下载更新？")
+            .setMessage(cleanBody)
             .setPositiveButton("立马下载更新") { _, _ ->
                 downloadApk(latestApkUrl, latestVersion)
             }
@@ -132,7 +138,7 @@ class ConnectionListActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun fetchLatestRelease(): Pair<String, String>? {
+    private fun fetchLatestRelease(): Triple<String, String, String>? {
         return try {
             val url = URL("https://api.github.com/repos/Mrkuzumi/YukiSSH/releases/latest")
             val conn = url.openConnection() as HttpURLConnection
@@ -147,6 +153,7 @@ class ConnectionListActivity : AppCompatActivity() {
             val tag = obj.getString("tag_name")
                 .trimStart('v', 'V')
                 .trimStart('-', '_')
+            val body = obj.optString("body", "")
             val assets = obj.getJSONArray("assets")
             var apkUrl = ""
             for (i in 0 until assets.length()) {
@@ -156,7 +163,7 @@ class ConnectionListActivity : AppCompatActivity() {
                     break
                 }
             }
-            if (apkUrl.isEmpty()) null else Pair(tag, apkUrl)
+            if (apkUrl.isEmpty()) null else Triple(tag, apkUrl, body)
         } catch (_: Exception) {
             null
         }
