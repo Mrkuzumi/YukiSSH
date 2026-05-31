@@ -65,8 +65,10 @@ class TerminalView @JvmOverloads constructor(
         color = color256(DEFAULT_FG)
         typeface = Typeface.MONOSPACE
         letterSpacing = 0f
+        isSubpixelText = false
     }
     private val bgPaint = Paint()
+    private val cursorPaint = Paint()
 
     var fontSizeDp = 9f; private set
 
@@ -126,11 +128,13 @@ class TerminalView @JvmOverloads constructor(
     }
 
     private fun recalcMetrics() {
-        // Average multiple characters for precise monospace width
-        charWidth = textPaint.measureText(CHAR_SAMPLE) / CHAR_SAMPLE.length
-        val fm = textPaint.fontMetrics
-        // Use exact glyph bounds (ascent+descent) without leading for crisp cell grid
-        charHeight = fm.descent - fm.ascent
+        // Use getTextWidths for exact monospace advance per character
+        val sample = CharArray(CHAR_SAMPLE.length) { CHAR_SAMPLE[it] }
+        val widths = FloatArray(sample.size)
+        textPaint.getTextWidths(sample, 0, sample.size, widths)
+        charWidth = widths.average().toFloat()
+        // Use fontSpacing for natural line height with leading
+        charHeight = textPaint.fontSpacing
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -377,7 +381,6 @@ class TerminalView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // Force-scroll to bottom before every frame if autoScroll is on
         if (autoScroll && buffer.size > rows && rows > 0) {
             viewScrollY = ((buffer.size - rows) * charHeight).toInt().coerceAtLeast(0)
         }
@@ -389,46 +392,46 @@ class TerminalView @JvmOverloads constructor(
         for (sr in 0 until visibleRows) {
             val br = topRow + sr
             if (br >= buffer.size) break
-            val y = (sr + 1) * charHeight
             val line = buffer[br]
             val lineLen = line.size
             if (lineLen == 0) continue
             val endCol = (startCol + visibleCols).coerceAtMost(lineLen)
-            var c = startCol
-            while (c < endCol) {
+            val cellTop = sr * charHeight
+            val baseline = (sr + 1) * charHeight - textPaint.descent()
+            for (c in startCol until endCol) {
                 val cell = line[c]
-                if (cell.ch == ' ' || cell.ch.code == 0) { c++; continue }
-                var end = c + 1
-                while (end < endCol) {
-                    val next = line[end]
-                    if (next.ch == ' ' || next.ch.code == 0) break
-                    if (next.fg != cell.fg || next.bg != cell.bg || next.bold != cell.bold) break
-                    end++
-                }
+                val ch = cell.ch
+                if (ch == ' ' || ch.code == 0) continue
                 val x = c * charWidth
-                val segWidth = (end - c) * charWidth
+                // Draw background
                 if (cell.bg != DEFAULT_BG) {
                     bgPaint.color = color256(cell.bg)
-                    canvas.drawRect(x, y - charHeight, x + segWidth, y, bgPaint)
+                    canvas.drawRect(x, cellTop, x + charWidth, cellTop + charHeight, bgPaint)
                 }
+                // Draw single character at exact grid position
                 textPaint.color = color256(cell.fg)
                 textPaint.isFakeBoldText = cell.bold
-                val chars = CharArray(end - c) { i -> line[c + i].ch }
-                canvas.drawText(String(chars), x, y - textPaint.descent(), textPaint)
-                c = end
+                canvas.drawText(ch.toString(), x, baseline, textPaint)
             }
         }
         // Draw cursor
-        if (cursorVisible && cursorRow >= topRow && cursorRow < topRow + visibleRows && cursorCol >= startCol) {
-            val cy = (cursorRow - topRow + 1) * charHeight
+        if (cursorVisible && cursorRow >= topRow && cursorRow < topRow + visibleRows) {
+            val cr = cursorRow - topRow
+            val cy = cr * charHeight
             val cx = cursorCol * charWidth
-            textPaint.color = color256(currentFg)
-            canvas.drawRect(cx, cy - charHeight, cx + charWidth, cy, textPaint)
+            // Cursor rect
+            cursorPaint.color = color256(if (currentFg < 8) 7 else 15)
+            canvas.drawRect(cx, cy, cx + charWidth, cy + charHeight, cursorPaint)
+            // Invert text on cursor
             if (cursorRow < buffer.size && cursorCol < buffer[cursorRow].size) {
                 val cell = buffer[cursorRow][cursorCol]
-                if (cell.ch != ' ' && cell.ch.code != 0) {
-                    textPaint.color = color256(cell.bg)
-                    canvas.drawText(cell.ch.toString(), cx, cy - textPaint.descent(), textPaint)
+                val ch = cell.ch
+                if (ch != ' ' && ch.code != 0) {
+                    textPaint.color = color256(cell.bg).let { bg ->
+                        // Use contrasting text color on cursor
+                        if (bg == color256(DEFAULT_BG)) color256(DEFAULT_FG) else bg
+                    }
+                    canvas.drawText(ch.toString(), cx, cy + charHeight - textPaint.descent(), textPaint)
                 }
             }
         }
