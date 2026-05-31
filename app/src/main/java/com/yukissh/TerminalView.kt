@@ -58,7 +58,6 @@ class TerminalView @JvmOverloads constructor(
 
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = color256(DEFAULT_FG)
-        typeface = Typeface.MONOSPACE
     }
     private val bgPaint = Paint()
     private val cursorPaint = Paint()
@@ -100,7 +99,17 @@ class TerminalView @JvmOverloads constructor(
     private var moved = false
 
     init {
+        loadTypeface()
         applyFontSize(fontSizeDp)
+    }
+
+    private fun loadTypeface() {
+        try {
+            val tf = Typeface.createFromAsset(context.assets, "fonts/JetBrainsMono-Regular.ttf")
+            textPaint.typeface = tf
+        } catch (_: Exception) {
+            textPaint.typeface = Typeface.MONOSPACE
+        }
     }
 
     fun changeFontSize(deltaDp: Float) {
