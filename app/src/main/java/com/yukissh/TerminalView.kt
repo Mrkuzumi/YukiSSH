@@ -101,7 +101,6 @@ class TerminalView @JvmOverloads constructor(
 
     init {
         applyFontSize(fontSizeDp)
-        setLayerType(LAYER_TYPE_HARDWARE, null)
     }
 
     fun changeFontSize(deltaDp: Float) {
@@ -123,6 +122,11 @@ class TerminalView @JvmOverloads constructor(
     private fun recalcMetrics() {
         charWidth = textPaint.measureText("X")
         charHeight = textPaint.fontSpacing
+        // 诊断：检查字体是否真正等宽
+        val wW = textPaint.measureText("W")
+        val wi = textPaint.measureText("i")
+        val wSpace = textPaint.measureText(" ")
+        android.util.Log.d("TerminalView", "fontSize=${fontSizeDp}dp charWidth=$charWidth W=$wW i=$wi space=$wSpace cols=${if (width > 0) (width / charWidth).toInt() else 0}")
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
