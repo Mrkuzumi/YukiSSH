@@ -101,6 +101,7 @@ class TerminalView @JvmOverloads constructor(
 
     init {
         applyFontSize(fontSizeDp)
+        setLayerType(LAYER_TYPE_HARDWARE, null)
     }
 
     fun changeFontSize(deltaDp: Float) {
