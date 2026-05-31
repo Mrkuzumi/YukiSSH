@@ -28,18 +28,14 @@ class TerminalView @JvmOverloads constructor(
                 when {
                     idx < 16 -> PALETTE_16[idx]
                     idx in 16..231 -> {
-                        // 6×6×6 RGB cube (xterm standard: 0, 95, 135, 175, 215, 255)
                         val n = idx - 16
-                        val rIdx = n / 36
-                        val gIdx = (n % 36) / 6
-                        val bIdx = n % 6
+                        val rIdx = n / 36; val gIdx = (n % 36) / 6; val bIdx = n % 6
                         val r = if (rIdx == 0) 0 else 55 + rIdx * 40
                         val g = if (gIdx == 0) 0 else 55 + gIdx * 40
                         val b = if (bIdx == 0) 0 else 55 + bIdx * 40
                         0xFF000000.toInt() or (r shl 16) or (g shl 8) or b
                     }
                     else -> {
-                        // Grayscale ramp (232-255)
                         val v = 8 + (idx - 232) * 10
                         0xFF000000.toInt() or (v shl 16) or (v shl 8) or v
                     }
@@ -51,8 +47,8 @@ class TerminalView @JvmOverloads constructor(
 
         private const val DEFAULT_FG = 7
         private const val DEFAULT_BG = 0
-        private const val MIN_FONT_DP = 6f
-        private const val MAX_FONT_DP = 20f
+        private const val MIN_FONT_DP = 8f
+        private const val MAX_FONT_DP = 24f
         private const val MAX_SCROLLBACK = 5000
     }
 
@@ -67,7 +63,7 @@ class TerminalView @JvmOverloads constructor(
     private val bgPaint = Paint()
     private val cursorPaint = Paint()
 
-    var fontSizeDp = 9f; private set
+    var fontSizeDp = 14f; private set
 
     private var charWidth = 0f
     private var charHeight = 0f
@@ -92,12 +88,11 @@ class TerminalView @JvmOverloads constructor(
 
     private var maxCols = 0
     private var autoScroll = true
-    private var viewScrollY = 0  // Custom scroll Y, not system scrollTo
+    private var viewScrollY = 0
     private var cursorVisible = true
     private val cursorBlinkInterval = 500L
     private val cursorBlinkTask = Runnable { toggleCursorBlink() }
 
-    // Touch tracking
     private var touchDownX = 0f
     private var touchDownY = 0f
     private var lastSX = 0
@@ -125,15 +120,7 @@ class TerminalView @JvmOverloads constructor(
     }
 
     private fun recalcMetrics() {
-        // Measure a fixed-width block of repeated chars for rock-solid charWidth
-        charWidth = textPaint.measureText("WWWWWWWWWW") / 10f
-        // Verify with a different character to detect non-monospace fonts
-        val alt = textPaint.measureText("iiiiiiiiii") / 10f
-        val diff = Math.abs(charWidth - alt) / charWidth
-        if (diff > 0.01f) {
-            // Font may not be true monospace; use the wider value to avoid clipping
-            charWidth = Math.max(charWidth, alt)
-        }
+        charWidth = textPaint.measureText("X")
         charHeight = textPaint.fontSpacing
     }
 
@@ -164,17 +151,12 @@ class TerminalView @JvmOverloads constructor(
         cursorVisible = true
         postDelayed(cursorBlinkTask, cursorBlinkInterval)
     }
-
-    private fun stopCursorBlink() {
-        removeCallbacks(cursorBlinkTask)
-    }
-
+    private fun stopCursorBlink() = removeCallbacks(cursorBlinkTask)
     private fun resetCursorBlink() {
         removeCallbacks(cursorBlinkTask)
         cursorVisible = true
         postDelayed(cursorBlinkTask, cursorBlinkInterval)
     }
-
     private fun toggleCursorBlink() {
         cursorVisible = !cursorVisible
         invalidate()
@@ -350,7 +332,6 @@ class TerminalView @JvmOverloads constructor(
         cursorRow++
         cursorCol = 0
         ensureLineCapacity(cursorRow, 0)
-        // Trim old lines if buffer exceeds limit
         while (buffer.size > MAX_SCROLLBACK) {
             buffer.removeAt(0)
             cursorRow--
@@ -379,6 +360,7 @@ class TerminalView @JvmOverloads constructor(
         }
     }
 
+    // ─── onDraw: 沿用 V1.0 验证过的批量拼接字符串绘制方式 ───
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         if (autoScroll && buffer.size > rows && rows > 0) {
@@ -392,45 +374,50 @@ class TerminalView @JvmOverloads constructor(
         for (sr in 0 until visibleRows) {
             val br = topRow + sr
             if (br >= buffer.size) break
+            val y = (sr + 1) * charHeight
             val line = buffer[br]
             val lineLen = line.size
             if (lineLen == 0) continue
             val endCol = (startCol + visibleCols).coerceAtMost(lineLen)
-            val cellTop = sr * charHeight
-            val baseline = (sr + 1) * charHeight - textPaint.descent()
-            for (c in startCol until endCol) {
+            var c = startCol
+            while (c < endCol) {
                 val cell = line[c]
-                val ch = cell.ch
-                if (ch == ' ' || ch.code == 0) continue
+                if (cell.ch == ' ' || cell.ch.code == 0) { c++; continue }
+                // 找到相同样式的连续字符段
+                var end = c + 1
+                while (end < endCol) {
+                    val next = line[end]
+                    if (next.ch == ' ' || next.ch.code == 0) break
+                    if (next.fg != cell.fg || next.bg != cell.bg || next.bold != cell.bold) break
+                    end++
+                }
                 val x = c * charWidth
-                // Draw background
+                val segWidth = (end - c) * charWidth
+                // 背景
                 if (cell.bg != DEFAULT_BG) {
                     bgPaint.color = color256(cell.bg)
-                    canvas.drawRect(x, cellTop, x + charWidth, cellTop + charHeight, bgPaint)
+                    canvas.drawRect(x, y - charHeight + dpToPx(1f), x + segWidth, y + dpToPx(1f), bgPaint)
                 }
-                // Draw single character at exact grid position
+                // 批量拼接字符串一次绘制（与 V1.0 一致）
                 textPaint.color = color256(cell.fg)
                 textPaint.isFakeBoldText = cell.bold
-                canvas.drawText(ch.toString(), x, baseline, textPaint)
+                val chars = CharArray(end - c) { i -> line[c + i].ch }
+                canvas.drawText(String(chars), x, y - textPaint.descent(), textPaint)
+                c = end
             }
         }
-        // Draw cursor
+        // 光标
         if (cursorVisible && cursorRow >= topRow && cursorRow < topRow + visibleRows) {
             val cr = cursorRow - topRow
             val cy = cr * charHeight
             val cx = cursorCol * charWidth
-            // Cursor rect
             cursorPaint.color = color256(if (currentFg < 8) 7 else 15)
             canvas.drawRect(cx, cy, cx + charWidth, cy + charHeight, cursorPaint)
-            // Invert text on cursor
             if (cursorRow < buffer.size && cursorCol < buffer[cursorRow].size) {
                 val cell = buffer[cursorRow][cursorCol]
                 val ch = cell.ch
                 if (ch != ' ' && ch.code != 0) {
-                    textPaint.color = color256(cell.bg).let { bg ->
-                        // Use contrasting text color on cursor
-                        if (bg == color256(DEFAULT_BG)) color256(DEFAULT_FG) else bg
-                    }
+                    textPaint.color = color256(if (cell.bg == DEFAULT_BG) DEFAULT_FG else cell.bg)
                     canvas.drawText(ch.toString(), cx, cy + charHeight - textPaint.descent(), textPaint)
                 }
             }
@@ -456,9 +443,7 @@ class TerminalView @JvmOverloads constructor(
                 if (moved) autoScroll = newY >= maxSY
                 invalidate()
             }
-            MotionEvent.ACTION_UP -> {
-                if (!moved) performClick()
-            }
+            MotionEvent.ACTION_UP -> { if (!moved) performClick() }
         }
         return true
     }
