@@ -54,6 +54,7 @@ class TerminalView @JvmOverloads constructor(
         private const val MIN_FONT_DP = 6f
         private const val MAX_FONT_DP = 20f
         private const val MAX_SCROLLBACK = 5000
+        private const val CHAR_SAMPLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     }
 
     data class Cell(var ch: Char = ' ', var fg: Int = DEFAULT_FG, var bg: Int = DEFAULT_BG, var bold: Boolean = false) {
@@ -63,6 +64,7 @@ class TerminalView @JvmOverloads constructor(
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = color256(DEFAULT_FG)
         typeface = Typeface.MONOSPACE
+        letterSpacing = 0f
     }
     private val bgPaint = Paint()
 
@@ -111,8 +113,7 @@ class TerminalView @JvmOverloads constructor(
         val newSize = (fontSizeDp + deltaDp).coerceIn(MIN_FONT_DP, MAX_FONT_DP)
         if (newSize != fontSizeDp) {
             applyFontSize(newSize)
-            charWidth = textPaint.measureText("X")
-            charHeight = textPaint.fontSpacing
+            recalcMetrics()
             if (width > 0) cols = (width / charWidth).toInt().coerceAtLeast(1)
             if (height > 0) rows = (height / charHeight).toInt().coerceAtLeast(1)
             invalidate()
@@ -124,10 +125,17 @@ class TerminalView @JvmOverloads constructor(
         textPaint.textSize = dpToPx(dp)
     }
 
+    private fun recalcMetrics() {
+        // Average multiple characters for precise monospace width
+        charWidth = textPaint.measureText(CHAR_SAMPLE) / CHAR_SAMPLE.length
+        val fm = textPaint.fontMetrics
+        // Use exact glyph bounds (ascent+descent) without leading for crisp cell grid
+        charHeight = fm.descent - fm.ascent
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        charWidth = textPaint.measureText("X")
-        charHeight = textPaint.fontSpacing
+        recalcMetrics()
         if (w > 0) cols = (w / charWidth).toInt().coerceAtLeast(1)
         if (h > 0) rows = (h / charHeight).toInt().coerceAtLeast(1)
         if (oldw == 0 || oldh == 0) {
@@ -401,7 +409,7 @@ class TerminalView @JvmOverloads constructor(
                 val segWidth = (end - c) * charWidth
                 if (cell.bg != DEFAULT_BG) {
                     bgPaint.color = color256(cell.bg)
-                    canvas.drawRect(x, y - charHeight + dpToPx(1f), x + segWidth, y + dpToPx(1f), bgPaint)
+                    canvas.drawRect(x, y - charHeight, x + segWidth, y, bgPaint)
                 }
                 textPaint.color = color256(cell.fg)
                 textPaint.isFakeBoldText = cell.bold
