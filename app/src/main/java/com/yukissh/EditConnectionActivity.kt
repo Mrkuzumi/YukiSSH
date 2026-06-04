@@ -49,6 +49,10 @@ class EditConnectionActivity : AppCompatActivity() {
                 Toast.makeText(this, "请输入主机地址", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
+            if (port !in 1..65535) {
+                Toast.makeText(this, "端口号范围 1-65535", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             if (username.isEmpty()) {
                 Toast.makeText(this, "请输入用户名", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener

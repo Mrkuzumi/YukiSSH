@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-2.1-blue?style=flat-square" alt="Version 2.1" />
+  <img src="https://img.shields.io/badge/Version-2.3-blue?style=flat-square" alt="Version 2.3" />
   <img src="https://img.shields.io/badge/API-26%2B-brightgreen?style=flat-square" alt="API 26+" />
   <img src="https://img.shields.io/badge/Kotlin-1.9-purple?style=flat-square" alt="Kotlin" />
   <img src="https://img.shields.io/badge/SSH-JSch%200.2.17-orange?style=flat-square" alt="JSch" />

@@ -14,55 +14,63 @@ class TerminalView @JvmOverloads constructor(
 ) : View(context, attrs, defStyle) {
 
     companion object {
-        // Standard 16 terminal colors
-        private val PALETTE_16 = intArrayOf(
-            0xFF0C0C0C.toInt(), 0xFFC50F1F.toInt(), 0xFF13A10E.toInt(), 0xFFC19C00.toInt(),
-            0xFF0037DA.toInt(), 0xFF881798.toInt(), 0xFF3A96DD.toInt(), 0xFFCCCCCC.toInt(),
-            0xFF767676.toInt(), 0xFFE74856.toInt(), 0xFF16C60C.toInt(), 0xFFF9F1A5.toInt(),
-            0xFF3B78FF.toInt(), 0xFFB4009E.toInt(), 0xFF61D6D6.toInt(), 0xFFF2F2F2.toInt(),
-        )
-
-        // Full 256-color palette (built lazily)
-        private val PALETTE_256: IntArray by lazy {
-            IntArray(256) { idx ->
-                when {
-                    idx < 16 -> PALETTE_16[idx]
-                    idx in 16..231 -> {
-                        val n = idx - 16
-                        val rIdx = n / 36; val gIdx = (n % 36) / 6; val bIdx = n % 6
-                        val r = if (rIdx == 0) 0 else 55 + rIdx * 40
-                        val g = if (gIdx == 0) 0 else 55 + gIdx * 40
-                        val b = if (bIdx == 0) 0 else 55 + bIdx * 40
-                        0xFF000000.toInt() or (r shl 16) or (g shl 8) or b
-                    }
-                    else -> {
-                        val v = 8 + (idx - 232) * 10
-                        0xFF000000.toInt() or (v shl 16) or (v shl 8) or v
-                    }
-                }
-            }
-        }
-
-        fun color256(idx: Int): Int = PALETTE_256[idx.coerceIn(0, 255)]
-
-        private const val DEFAULT_FG = 7
-        private const val DEFAULT_BG = 0
         private const val MIN_FONT_DP = 8f
         private const val MAX_FONT_DP = 24f
         private const val MAX_SCROLLBACK = 5000
     }
 
-    data class Cell(var ch: Char = ' ', var fg: Int = DEFAULT_FG, var bg: Int = DEFAULT_BG, var bold: Boolean = false) {
-        fun reset() { ch = ' '; fg = DEFAULT_FG; bg = DEFAULT_BG; bold = false }
+    data class Cell(var ch: Char = ' ', var fg: Int = 7, var bg: Int = 0, var bold: Boolean = false) {
+        fun reset(defFg: Int, defBg: Int) { ch = ' '; fg = defFg; bg = defBg; bold = false }
     }
 
+    // ── 主题（必须在 textPaint 之前初始化）──
+    var currentTheme = TerminalTheme.BUILTIN[0]; private set
+    private var palette256 = buildPalette256(currentTheme.palette16)
+    private var defFg = currentTheme.defaultFg
+    private var defBg = currentTheme.defaultBg
+
+    private fun buildPalette256(base16: IntArray): IntArray = IntArray(256) { idx ->
+        when {
+            idx < 16 -> base16[idx]
+            idx in 16..231 -> {
+                val n = idx - 16; val rIdx = n / 36; val gIdx = (n % 36) / 6; val bIdx = n % 6
+                val r = if (rIdx == 0) 0 else 55 + rIdx * 40
+                val g = if (gIdx == 0) 0 else 55 + gIdx * 40
+                val b = if (bIdx == 0) 0 else 55 + bIdx * 40
+                0xFF000000.toInt() or (r shl 16) or (g shl 8) or b
+            }
+            else -> { val v = 8 + (idx - 232) * 10; 0xFF000000.toInt() or (v shl 16) or (v shl 8) or v }
+        }
+    }
+
+    fun color256(idx: Int): Int = palette256[idx.coerceIn(0, 255)]
+
+    fun cycleTheme() {
+        val themes = TerminalTheme.BUILTIN
+        val idx = themes.indexOfFirst { it.name == currentTheme.name }
+        val next = themes[(idx + 1) % themes.size]
+        applyTheme(next)
+    }
+
+    fun applyTheme(theme: TerminalTheme) {
+        currentTheme = theme
+        palette256 = buildPalette256(theme.palette16)
+        defFg = theme.defaultFg
+        defBg = theme.defaultBg
+        textPaint.color = color256(defFg)
+        invalidate()
+    }
+
+    fun getThemeName(): String = currentTheme.name
+
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = color256(DEFAULT_FG)
+        color = 0xFFCCCCCC.toInt()
     }
     private val bgPaint = Paint()
     private val cursorPaint = Paint()
 
     var fontSizeDp = 14f; private set
+    var onFontSizeChanged: ((Float) -> Unit)? = null
 
     private var charWidth = 0f
     private var charHeight = 0f
@@ -73,8 +81,8 @@ class TerminalView @JvmOverloads constructor(
     private var cursorRow = 0
     private var cursorCol = 0
 
-    private var currentFg = DEFAULT_FG
-    private var currentBg = DEFAULT_BG
+    private var currentFg = defFg
+    private var currentBg = defBg
     private var currentBold = false
 
     private var escState = 0
@@ -101,6 +109,7 @@ class TerminalView @JvmOverloads constructor(
     init {
         loadTypeface()
         applyFontSize(fontSizeDp)
+        textPaint.color = color256(defFg)
     }
 
     private fun loadTypeface() {
@@ -119,6 +128,7 @@ class TerminalView @JvmOverloads constructor(
             recalcMetrics()
             if (width > 0) cols = (width / charWidth).toInt().coerceAtLeast(1)
             if (height > 0) rows = (height / charHeight).toInt().coerceAtLeast(1)
+            onFontSizeChanged?.invoke(fontSizeDp)
             invalidate()
         }
     }
@@ -310,12 +320,12 @@ class TerminalView @JvmOverloads constructor(
 
     private fun handleSgr(params: List<Int>) {
         if (params.isEmpty() || (params.size == 1 && params[0] == 0)) {
-            currentFg = DEFAULT_FG; currentBg = DEFAULT_BG; currentBold = false; return
+            currentFg = defFg; currentBg = defBg; currentBold = false; return
         }
         var i = 0
         while (i < params.size) {
             when (val p = params[i]) {
-                0 -> { currentFg = DEFAULT_FG; currentBg = DEFAULT_BG; currentBold = false }
+                0 -> { currentFg = defFg; currentBg = defBg; currentBold = false }
                 1 -> currentBold = true
                 22 -> currentBold = false
                 in 30..37 -> currentFg = p - 30
@@ -360,7 +370,7 @@ class TerminalView @JvmOverloads constructor(
             val endC = if (r == r2) c2.coerceAtMost(line.size - 1) else line.size - 1
             for (c in startC..endC) {
                 while (line.size <= c) line.add(Cell())
-                line[c].reset()
+                line[c].reset(defFg, defBg)
             }
         }
     }
@@ -370,7 +380,7 @@ class TerminalView @JvmOverloads constructor(
         val endC = c2.coerceAtMost(line.size - 1)
         for (c in c1..endC) {
             while (line.size <= c) line.add(Cell())
-            line[c].reset()
+            line[c].reset(defFg, defBg)
         }
     }
 
@@ -408,7 +418,7 @@ class TerminalView @JvmOverloads constructor(
                 val x = c * charWidth
                 val segWidth = (end - c) * charWidth
                 // 背景
-                if (cell.bg != DEFAULT_BG) {
+                if (cell.bg != defBg) {
                     bgPaint.color = color256(cell.bg)
                     canvas.drawRect(x, y - charHeight + dpToPx(1f), x + segWidth, y + dpToPx(1f), bgPaint)
                 }
@@ -431,7 +441,7 @@ class TerminalView @JvmOverloads constructor(
                 val cell = buffer[cursorRow][cursorCol]
                 val ch = cell.ch
                 if (ch != ' ' && ch.code != 0) {
-                    textPaint.color = color256(if (cell.bg == DEFAULT_BG) DEFAULT_FG else cell.bg)
+                    textPaint.color = color256(if (cell.bg == defBg) defFg else cell.bg)
                     canvas.drawText(ch.toString(), cx, cy + charHeight - textPaint.descent(), textPaint)
                 }
             }
@@ -473,7 +483,7 @@ class TerminalView @JvmOverloads constructor(
         buffer.clear()
         for (i in 0 until rows) buffer.add(mutableListOf())
         cursorRow = 0; cursorCol = 0; maxCols = 0
-        currentFg = DEFAULT_FG; currentBg = DEFAULT_BG; currentBold = false
+        currentFg = defFg; currentBg = defBg; currentBold = false
         escState = 0; params.clear(); csiParams.clear()
         utf8Expected = 0; utf8Len = 0
         autoScroll = true; viewScrollY = 0; scrollTo(0, 0)

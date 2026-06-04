@@ -51,6 +51,7 @@ class TerminalActivity : AppCompatActivity() {
     private var clearing = false
     private var isReconnect = false
     private var started = false
+    private var connectTimeout: Runnable? = null
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -91,6 +92,16 @@ class TerminalActivity : AppCompatActivity() {
 
         tvTitle.text = connection!!.name.ifEmpty { "${connection!!.username}@${connection!!.host}" }
 
+        // 持久化字体大小
+        val fontPrefs = getSharedPreferences("terminal", MODE_PRIVATE)
+        val savedFontSize = fontPrefs.getFloat("fontSizeDp", 14f)
+        if (savedFontSize != 14f) {
+            terminalView.changeFontSize(savedFontSize - 14f)
+        }
+        terminalView.onFontSizeChanged = { size ->
+            fontPrefs.edit().putFloat("fontSizeDp", size).apply()
+        }
+
         findViewById<ImageButton>(R.id.btnClose).setOnClickListener {
             sshManager?.disconnect()
             unbindService(serviceConnection)
@@ -119,6 +130,11 @@ class TerminalActivity : AppCompatActivity() {
             val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
             Toast.makeText(this, "已复制终端内容", Toast.LENGTH_SHORT).show()
+        }
+
+        findViewById<ImageButton>(R.id.btnTheme).setOnClickListener {
+            terminalView.cycleTheme()
+            Toast.makeText(this, "主题：${terminalView.getThemeName()}", Toast.LENGTH_SHORT).show()
         }
 
         findViewById<ImageButton>(R.id.btnRefresh).setOnClickListener {
@@ -237,7 +253,7 @@ class TerminalActivity : AppCompatActivity() {
         terminalView.write(data, len)
     }
 
-    private val statusListener: (SSHManager.Status) -> Unit = { status ->
+    private val statusListener: (SSHManager.Status, String?) -> Unit = { status, msg ->
         runOnUiThread {
             when (status) {
                 SSHManager.Status.CONNECTING -> {
@@ -245,8 +261,18 @@ class TerminalActivity : AppCompatActivity() {
                     tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connecting_text))
                     statusDot.setBackgroundResource(R.drawable.dot_yellow)
                     setPillColor(statusPill, R.color.status_connecting_bg)
+                    // 12s 超时自动切换为失败状态
+                    connectTimeout?.let { terminalView.removeCallbacks(it) }
+                    connectTimeout = Runnable {
+                        tvStatus.text = "连接超时"
+                        tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
+                        statusDot.setBackgroundResource(R.drawable.dot_red)
+                        setPillColor(statusPill, R.color.status_disconnected_bg)
+                    }
+                    terminalView.postDelayed(connectTimeout!!, 12000)
                 }
                 SSHManager.Status.CONNECTED -> {
+                    connectTimeout?.let { terminalView.removeCallbacks(it); connectTimeout = null }
                     tvStatus.text = getString(R.string.connected)
                     tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connected_text))
                     statusDot.setBackgroundResource(R.drawable.dot_green)
@@ -257,13 +283,15 @@ class TerminalActivity : AppCompatActivity() {
                     isReconnect = false
                 }
                 SSHManager.Status.DISCONNECTED -> {
+                    connectTimeout?.let { terminalView.removeCallbacks(it); connectTimeout = null }
                     tvStatus.text = getString(R.string.disconnected)
                     tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
                     statusDot.setBackgroundResource(R.drawable.dot_red)
                     setPillColor(statusPill, R.color.status_disconnected_bg)
                 }
                 SSHManager.Status.ERROR -> {
-                    tvStatus.text = "连接断开"
+                    connectTimeout?.let { terminalView.removeCallbacks(it); connectTimeout = null }
+                    tvStatus.text = msg ?: "连接失败"
                     tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected_text))
                     statusDot.setBackgroundResource(R.drawable.dot_red)
                     setPillColor(statusPill, R.color.status_disconnected_bg)
@@ -331,7 +359,10 @@ class TerminalActivity : AppCompatActivity() {
                 setPadding(padH, padV, padH, padV)
                 setTextColor(ContextCompat.getColor(this@TerminalActivity, R.color.terminal_on_surface))
                 setBackgroundColor(ContextCompat.getColor(this@TerminalActivity, R.color.terminal_toolbar))
-                setOnClickListener { sshManager?.send(data) }
+                setOnClickListener {
+                    performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                    sshManager?.send(data)
+                }
             }
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,

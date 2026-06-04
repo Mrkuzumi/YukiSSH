@@ -19,12 +19,12 @@ class SSHManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val outputListeners = mutableListOf<(ByteArray, Int) -> Unit>()
-    private val statusListeners = mutableListOf<(Status) -> Unit>()
+    private val statusListeners = mutableListOf<(Status, String?) -> Unit>()
 
     fun addOutputListener(listener: (ByteArray, Int) -> Unit) = outputListeners.add(listener)
     fun removeOutputListener(listener: (ByteArray, Int) -> Unit) = outputListeners.remove(listener)
-    fun addStatusListener(listener: (Status) -> Unit) = statusListeners.add(listener)
-    fun removeStatusListener(listener: (Status) -> Unit) = statusListeners.remove(listener)
+    fun addStatusListener(listener: (Status, String?) -> Unit) = statusListeners.add(listener)
+    fun removeStatusListener(listener: (Status, String?) -> Unit) = statusListeners.remove(listener)
 
     enum class Status { CONNECTING, CONNECTED, DISCONNECTED, ERROR }
 
@@ -34,7 +34,7 @@ class SSHManager {
         job?.cancel()
         job = scope.launch {
             try {
-                statusListeners.forEach { it(Status.CONNECTING) }
+                statusListeners.forEach { it(Status.CONNECTING, null) }
 
                 val jsch = JSch()
                 jsch.setKnownHosts("/dev/null")
@@ -62,7 +62,7 @@ class SSHManager {
                 inputStream = ch?.inputStream
 
                 ch?.connect(5000)
-                statusListeners.forEach { it(Status.CONNECTED) }
+                statusListeners.forEach { it(Status.CONNECTED, null) }
 
                 try {
                     stdinWriter.write('\r'.code)
@@ -93,8 +93,9 @@ class SSHManager {
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 Log.e("SSHManager", "connection error", e)
+                val msg = e.localizedMessage ?: e.javaClass.simpleName
                 withContext(Dispatchers.Main) {
-                    statusListeners.forEach { it(Status.ERROR) }
+                    statusListeners.forEach { it(Status.ERROR, msg) }
                 }
             }
         }
@@ -127,7 +128,7 @@ class SSHManager {
         channel = null
         outputStream = null
         inputStream = null
-        statusListeners.forEach { it(Status.DISCONNECTED) }
+        statusListeners.forEach { it(Status.DISCONNECTED, null) }
     }
 
     fun destroy() {

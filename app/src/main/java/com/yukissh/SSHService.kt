@@ -52,7 +52,7 @@ class SSHService : Service() {
 
     private var connName: String = ""
     private var connStatus: String = "等待连接…"
-    private var notifyStatusListener: ((SSHManager.Status) -> Unit)? = null
+    private var notifyStatusListener: ((SSHManager.Status, String?) -> Unit)? = null
 
     fun startConnection(conn: SSHConnection, cols: Int, rows: Int) {
         connName = conn.name.ifEmpty { "${conn.username}@${conn.host}" }
@@ -61,12 +61,12 @@ class SSHService : Service() {
         wakeLock?.acquire()
         wifiLock?.acquire()
         notifyStatusListener?.let { sshManager.removeStatusListener(it) }
-        notifyStatusListener = { status ->
+        notifyStatusListener = { status, msg ->
             connStatus = when (status) {
                 SSHManager.Status.CONNECTING -> "正在连接…"
                 SSHManager.Status.CONNECTED -> "已连接"
                 SSHManager.Status.DISCONNECTED -> "已断开"
-                SSHManager.Status.ERROR -> "连接断开"
+                SSHManager.Status.ERROR -> msg ?: "连接失败"
             }
             updateNotification()
             if (status == SSHManager.Status.DISCONNECTED || status == SSHManager.Status.ERROR) {
