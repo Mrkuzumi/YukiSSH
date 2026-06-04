@@ -100,11 +100,24 @@ class TerminalView @JvmOverloads constructor(
     private val cursorBlinkInterval = 500L
     private val cursorBlinkTask = Runnable { toggleCursorBlink() }
 
+    // ── 文本选中 ──
+    var isSelecting = false; private set
+    private var selStartRow = -1; private var selStartCol = -1
+    private var selEndRow = -1; private var selEndCol = -1
+    private val selColor = 0x80_4488FF.toInt()  // 半透明蓝
+    var onSelectionChanged: ((Boolean) -> Unit)? = null  // true=进入选中模式, false=退出
+
     private var touchDownX = 0f
     private var touchDownY = 0f
     private var lastSX = 0
     private var lastSY = 0
     private var moved = false
+    private var longPressPending = false
+    private val longPressRunnable = Runnable {
+        if (longPressPending && !moved) {
+            enterSelectionMode(touchDownX, touchDownY)
+        }
+    }
 
     init {
         loadTypeface()
@@ -430,6 +443,38 @@ class TerminalView @JvmOverloads constructor(
                 c = end
             }
         }
+        // 选中高亮
+        if (isSelecting) {
+            val (r1, r2) = if (selStartRow <= selEndRow) selStartRow to selEndRow else selEndRow to selStartRow
+            val selPaint = Paint().apply { color = selColor }
+            for (r in r1..r2) {
+                if (r < topRow || r >= topRow + visibleRows || r >= buffer.size) continue
+                val line = buffer[r]
+                val c1: Int; val c2: Int
+                if (selStartRow == selEndRow) {
+                    c1 = minOf(selStartCol, selEndCol); c2 = maxOf(selStartCol, selEndCol)
+                } else if (r == r1 && r == selStartRow) {
+                    c1 = selStartCol; c2 = line.size
+                } else if (r == r2 && r == selEndRow) {
+                    c1 = 0; c2 = selEndCol
+                } else if (r == r1 && r == selEndRow) {
+                    c1 = selEndCol; c2 = line.size
+                } else if (r == r2 && r == selStartRow) {
+                    c1 = 0; c2 = selStartCol
+                } else {
+                    c1 = 0; c2 = line.size
+                }
+                val startColSel = c1.coerceIn(0, line.size)
+                val endColSel = c2.coerceIn(0, line.size)
+                if (startColSel >= endColSel) continue
+                val sr = r - topRow
+                canvas.drawRect(
+                    startColSel * charWidth, sr * charHeight,
+                    endColSel * charWidth, (sr + 1) * charHeight,
+                    selPaint
+                )
+            }
+        }
         // 光标
         if (cursorVisible && cursorRow >= topRow && cursorRow < topRow + visibleRows) {
             val cr = cursorRow - topRow
@@ -453,23 +498,108 @@ class TerminalView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 touchDownX = event.x; touchDownY = event.y
                 lastSX = scrollX; lastSY = viewScrollY; moved = false
+                // 长按 500ms 进入选中模式
+                longPressPending = true
+                postDelayed(longPressRunnable, 500)
             }
             MotionEvent.ACTION_MOVE -> {
                 val dx = (touchDownX - event.x).toInt()
                 val dy = (touchDownY - event.y).toInt()
-                if (Math.abs(dx) > 5 || Math.abs(dy) > 5) moved = true
-                val maxSX = ((maxCols * charWidth) - width).toInt().coerceAtLeast(0)
-                val newX = (lastSX + dx).coerceIn(0, maxSX)
-                val maxSY = ((buffer.size - rows) * charHeight).toInt().coerceAtLeast(0)
-                val newY = (lastSY + dy).coerceIn(0, maxSY)
-                scrollTo(newX, 0)
-                viewScrollY = newY
-                if (moved) autoScroll = newY >= maxSY
-                invalidate()
+                if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                    moved = true
+                    longPressPending = false
+                }
+                if (isSelecting) {
+                    updateSelection(event.x, event.y)
+                } else {
+                    val maxSX = ((maxCols * charWidth) - width).toInt().coerceAtLeast(0)
+                    val newX = (lastSX + dx).coerceIn(0, maxSX)
+                    val maxSY = ((buffer.size - rows) * charHeight).toInt().coerceAtLeast(0)
+                    val newY = (lastSY + dy).coerceIn(0, maxSY)
+                    scrollTo(newX, 0)
+                    viewScrollY = newY
+                    if (moved) autoScroll = newY >= maxSY
+                    invalidate()
+                }
             }
-            MotionEvent.ACTION_UP -> { if (!moved) performClick() }
+            MotionEvent.ACTION_UP -> {
+                longPressPending = false
+                removeCallbacks(longPressRunnable)
+                if (isSelecting) {
+                    if (!moved) exitSelectionMode()
+                } else if (!moved) {
+                    performClick()
+                }
+                moved = false
+            }
         }
         return true
+    }
+
+    private fun touchToCell(x: Float, y: Float): Pair<Int, Int> {
+        val col = ((x + scrollX) / charWidth).toInt().coerceAtLeast(0)
+        val row = ((y + viewScrollY) / charHeight).toInt().coerceAtLeast(0)
+        return Pair(row.coerceAtMost(buffer.size - 1), col)
+    }
+
+    private fun enterSelectionMode(x: Float, y: Float) {
+        val (row, col) = touchToCell(x, y)
+        if (row >= buffer.size || col >= (buffer.getOrNull(row)?.size ?: 0)) return
+        isSelecting = true
+        selStartRow = row; selStartCol = col
+        selEndRow = row; selEndCol = col
+        onSelectionChanged?.invoke(true)
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        invalidate()
+    }
+
+    private fun updateSelection(x: Float, y: Float) {
+        val (row, col) = touchToCell(x, y)
+        selEndRow = row.coerceIn(0, buffer.size - 1)
+        selEndCol = col.coerceAtLeast(0)
+        invalidate()
+    }
+
+    private fun exitSelectionMode() {
+        isSelecting = false
+        selStartRow = -1; selStartCol = -1
+        selEndRow = -1; selEndCol = -1
+        onSelectionChanged?.invoke(false)
+        invalidate()
+    }
+
+    /** 获取选中的文本 */
+    fun getSelectedText(): String {
+        if (!isSelecting) return getText()
+        val r1 = minOf(selStartRow, selEndRow)
+        val r2 = maxOf(selStartRow, selEndRow)
+        val c1: Int; val c2: Int
+        if (selStartRow == selEndRow) {
+            c1 = minOf(selStartCol, selEndCol)
+            c2 = maxOf(selStartCol, selEndCol)
+        } else if (r1 == selStartRow) {
+            c1 = selStartCol; c2 = selEndCol
+        } else {
+            c1 = selEndCol; c2 = selStartCol
+        }
+        val sb = StringBuilder()
+        for (r in r1..r2) {
+            if (r >= buffer.size) break
+            val line = buffer[r]
+            if (line.isEmpty()) { sb.appendLine(); continue }
+            val start = c1.coerceIn(0, line.size - 1)
+            val end = (c2 + 1).coerceIn(start, line.size)
+            for (c in start until end) {
+                sb.append(line[c].ch)
+            }
+            sb.appendLine()
+        }
+        return sb.toString().trimEnd()
+    }
+
+    /** 清除选中 */
+    fun clearSelection() {
+        if (isSelecting) exitSelectionMode()
     }
 
     override fun computeHorizontalScrollRange(): Int = (maxCols * charWidth).toInt()

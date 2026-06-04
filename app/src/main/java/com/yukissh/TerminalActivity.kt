@@ -126,10 +126,22 @@ class TerminalActivity : AppCompatActivity() {
         }
 
         findViewById<ImageButton>(R.id.btnCopy).setOnClickListener {
-            val text = terminalView.getText()
+            val text = if (terminalView.isSelecting) terminalView.getSelectedText() else terminalView.getText()
             val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
             clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
-            Toast.makeText(this, "已复制终端内容", Toast.LENGTH_SHORT).show()
+            val msg = if (terminalView.isSelecting) "已复制选中文本" else "已复制终端内容"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            if (terminalView.isSelecting) terminalView.clearSelection()
+        }
+
+        terminalView.onSelectionChanged = { selecting ->
+            if (selecting) {
+                tvStatus.text = "选中模式"
+                tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connecting_text))
+            } else {
+                tvStatus.text = getString(R.string.connected)
+                tvStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connected_text))
+            }
         }
 
         findViewById<ImageButton>(R.id.btnTheme).setOnClickListener {
